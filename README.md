@@ -1,1 +1,2 @@
-# CB_projekt
+# CB_projekt  
+Autorzy: Agata Lubos i Łukasz Trybuś
