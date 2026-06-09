@@ -3,16 +3,16 @@
 {% block banner %}
 <!-- BANER -->
 <div id="banner" style="text-align:center !important;">
-	<h2 style="text-align:center !important;">
-		Witaj w panelu operacyjnym, {{ username }}!
-	</h2>
-	<p style="text-align:center !important; width:100%;">
-		System czeka na Twoje polecenia. Przewiń w dół, wybierz cel i zdobądź kolejną flagę.
-	</p>
-	<br>
-	<div style="text-align:center; margin-top:100px;">
-		<a href="#main-wrapper" class="button large icon solid fa-arrow-down">Przejdź do zadań</a>
-	</div>
+    <h2 style="text-align:center !important;">
+        Witaj w panelu operacyjnym, {{ username }}!
+    </h2>
+    <p style="text-align:center !important; width:100%;">
+        System czeka na Twoje polecenia. Przewiń w dół, wybierz cel i zdobądź kolejną flagę.
+    </p>
+    <br>
+    <div style="text-align:center; margin-top:100px;">
+        <a href="#main-wrapper" class="button large icon solid fa-arrow-down">Dodaj nowe zadania</a>
+    </div>
 </div>
 {% endblock %}
 
@@ -23,7 +23,7 @@
         <p>Wypełnij formularz, aby opublikować zadanie dla graczy.</p>
     </header>
 
-    <form method="POST" action="/admin/add-challenge">
+    <form method="POST" action="/admin/add-challenge" class="admin-form">
         <div class="row gtr-50">
             <div class="col-12">
                 <input type="text" name="title" placeholder="Tytuł zadania (np. Podatna wyszukiwarka)" required />
@@ -32,7 +32,7 @@
                 <textarea name="description" placeholder="Opis zadania i wskazówki dla studenta..." rows="4" required></textarea>
             </div>
             <div class="col-6 col-12-small">
-                <select name="category" required style="width: 100%; padding: 0.5em; background: #222; color: #fff; border: 1px solid #444;">
+                <select name="category" required>
                     <option value="" disabled selected>Wybierz kategorię...</option>
                     <option value="Web Exploitation">Web Exploitation</option>
                     <option value="Cryptography">Cryptography</option>
