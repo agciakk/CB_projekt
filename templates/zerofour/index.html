@@ -1,205 +1,56 @@
-<!DOCTYPE HTML>
-<html>
-	<head>
-		<title>Symulator ataków i ćwiczeń CTF</title>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-		<link rel="stylesheet" href="assets/css/main.css" />
-	</head>
-	<body class="homepage is-preload">
-		<div id="page-wrapper">
+{% extends "zerofour/base.html" %}
 
-			<div id="header-wrapper">
-					<div class="container">
-
-						<header id="header">
-								<div class="inner">
-
-                                    <h1>
-                                        <a href="/" id="logo">
-                                            {% if username %}
-                                                Witaj, {{ username }}!
-                                            {% else %}
-                                                Nazwa
-                                            {% endif %}
-                                        </a>
-                                    </h1>
-
-									<nav id="nav">
-    <ul>
-        <li class="current_page_item"><a href="/">Home</a></li>
-        <li>
-    <a href="#">Platforma</a>
-    <ul>
-        <li><a href="/scoreboard">Tabela wyników (Scoreboard)</a></li>
-        <li><a href="/rules">Zasady i FAQ</a></li>
-        <li>
-            <a href="#">Kategorie zadań</a>
-            <ul>
-                <li><a href="#">Web Exploitation</a></li>
-                <li><a href="#">Cryptography</a></li>
-                <li><a href="#">Forensics</a></li>
-            </ul>
-        </li>
-    </ul>
-</li>
-        
-        {% if username %}
-            {% if username == 'admin' %}
-                <li><a href="/admin" style="color: #66b3ff;">Panel Administratora</a></li>
-            {% endif %}
-            
-            <li><a href="/logout" style="color: #ff6666;">Wyloguj się</a></li>
-        {% else %}
-            <li><a href="/register">Zarejestruj się</a></li>
-            <li><a href="/login">Zaloguj się</a></li>
-        {% endif %}
-    </ul>
-</nav>
-
-								</div>
-							</header>
-
-						<div id="banner" style="text-align:center !important;">
-
-    {% if username %}
-        <h2 style="text-align:center !important;">
-            Witaj z powrotem w panelu operacyjnym, {{ username }}!
-        </h2>
-
-        <p style="text-align:center !important; width:100%;">
-            System czeka na Twoje polecenia. Przewiń w dół, wybierz cel i zdobądź kolejną flagę.
-        </p>
-
-        <div style="text-align:center; margin-top:20px;">
-            <a href="#main-wrapper" class="button large icon solid fa-arrow-down">
-                Przejdź do zadań
-            </a>
-        </div>
-
-    {% else %}
-        <h2 style="text-align:center !important;">
-            Sprawdź swoje umiejętności w świecie cyberbezpieczeństwa
-        </h2>
-
-        <p style="text-align:center !important; width:100%;">
-            Rozwiązuj praktyczne zadania typu Capture The Flag, analizuj podatności i pnij się w rankingu.
-            <br>
-            Gotowy na wyzwanie? Załóż konto i dołącz do gry!
-        </p>
-
-        <div style="text-align:center; margin-top:20px;">
-            <a href="/register" class="button large icon solid fa-terminal">
-                Rozpocznij hackowanie
-            </a>
-        </div>
-    {% endif %}
-
-</div>
-
-					</div>
-				</div>
-
-			<div id="main-wrapper">
-					<div class="wrapper style1">
-						<div class="inner">
-
-							<section class="container box feature1">
-									<div class="row">
-    <div class="col-12">
-        <header class="first major">
-            <h2>Wyzwania CTF</h2>
-            <p>Zaloguj się, wybierz zadanie i zdobądź punkty dla swojego zespołu!</p>
-        </header>
+{% block banner %}
+<!-- BANER -->
+<div id="banner" style="text-align:center !important;">
+    <h2 style="text-align:center !important;">Sprawdź swoje umiejętności w świecie cyberbezpieczeństwa</h2>
+    <p style="text-align:center !important; width:100%;">
+        Rozwiązuj praktyczne zadania typu Capture The Flag, <br>
+        analizuj podatności i pnij się w rankingu.
+        <br>
+        Gotowy na wyzwanie? Załóż konto i dołącz do gry!<br>
+    </p>
+    <br>
+    <div style="text-align:center; margin-top:100px;">
+        <a href="/register" class="button large icon solid fa-terminal">
+            Rozpocznij hackowanie
+        </a>
     </div>
-    
-    {% for challenge in challenges %}
-    <div class="col-4 col-12-medium">
-        <section class="box feature1">
-            <header class="second icon solid 
-                {% if challenge.category == 'Web Exploitation' %}fa-globe
-                {% elif challenge.category == 'Cryptography' %}fa-lock
-                {% else %}fa-search{% endif %}">
-                
-                <h3>{{ challenge.title }}</h3>
-                <p><strong>{{ challenge.category }}</strong> | Punkty: {{ challenge.points }}</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- WYZWANIA -->
+<section class="container box feature1">
+    <div class="row">
+        <div class="col-12">
+            <header class="first major">
+                <h2>Wyzwania CTF</h2>
+                <p>Zaloguj się, wybierz zadanie i zdobywaj punkty dla swojego zespołu!</p>
             </header>
-            <p>{{ challenge.description }}</p>
-            
-            {% if username %}
-                <a href="/challenge/{{ challenge.id }}" class="button alt">Rozwiąż</a>
-            {% else %}
-                <p style="color: #aaa; font-size: 0.9em;">Zaloguj się, aby rozwiązać</p>
-            {% endif %}
-        </section>
+        </div>
+
+        {% for challenge in challenges %}
+        <div class="col-4 col-12-medium">
+            <section class="box feature1">
+                <header class="second icon solid 
+                    {% if challenge.category == 'Web Exploitation' %}fa-globe
+                    {% elif challenge.category == 'Cryptography' %}fa-lock
+                    {% else %}fa-search{% endif %}">
+                    
+                    <h3>{{ challenge.title }}</h3>
+                    <p><strong>{{ challenge.category }}</strong> | Punkty: {{ challenge.points }}</p>
+                </header>
+                <p>{{ challenge.description }}</p>
+                
+                {% if username %}
+                    <a href="/challenge/{{ challenge.id }}" class="button alt">Rozwiąż</a>
+                {% else %}
+                    <p style="color: #aaa; font-size: 0.9em;">Zaloguj się, aby rozwiązać</p>
+                {% endif %}
+            </section>
+        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
-
-</div>
-								</section>
-
-						</div>
-					</div>
-				</div>
-
-			<div id="footer-wrapper">
-					<footer id="footer" class="container">
-						<div class="row">
-							<div class="col-12">
-								<section class="style1" style="text-align: center;">
-									<h2>Skontaktuj się z nami</h2>
-									<p>
-										Masz pytanie lub potrzebujesz pomocy? <br />
-										Wypełnij formularz – skontaktujemy się z Tobą tak szybko, jak to możliwe.
-									</p>
-								</section>
-
-								<section>
-									<form method="post" action="https://formspree.io/f/xrevqrzo">
-										<div class="row gtr-50">
-											<div class="col-6 col-12-small">
-												<input type="text" name="name" id="contact-name" placeholder="Imię i nazwisko" required />
-											</div>
-											<div class="col-6 col-12-small">
-												<input type="email" name="email" id="contact-email" placeholder="Email" required />
-											</div>
-											<div class="col-12">
-												<textarea name="message" id="contact-message" placeholder="Wiadomość" rows="4" required></textarea>
-											</div>
-											<div class="col-12">
-												<label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; text-align: justify;">
-													<input type="checkbox" name="user_acceptance" value="1" required style="width: auto; margin-top: 3px;">
-													<span style="font-size: 0.85em; line-height: 1.4; color: #aaa;">Wyrażam zgodę na przetwarzanie danych osobowych w celu przesłania odpowiedzi na mój adres e-mail podany powyżej w formularzu kontaktowym. (Informujemy, że Państwa zgoda może zostać cofnięta w dowolnym momencie przez wysłanie wiadomości e-mail za pomocą niniejszego formularza kontaktowego. Państwa dane nie są przekazywane ani udostępniane osobom trzecim i nie są profilowane).</span>
-												</label>
-											</div>
-											<div class="col-12" style="text-align: center;">
-												<ul class="actions" style="display: inline-flex; gap: 1em; margin: 0 auto;">
-													<li><input type="submit" class="button alt" value="Wyślij" /></li>
-													<li><input type="reset" class="button alt" value="Resetuj" /></li>
-												</ul>
-											</div>
-										</div>
-									</form>
-								</section>
-							</div>
-							<div class="col-12">
-								<div id="copyright">
-									<ul class="menu">
-										<li>&copy; Copyright © 2026 Nazwa. Wszelkie prawa zastrzeżone</li>
-									</ul>
-								</div>
-							</div>
-						</div>
-					</footer>
-				</div>
-		</div>
-
-		<script src="assets/js/jquery.min.js"></script>
-			<script src="assets/js/jquery.dropotron.min.js"></script>
-			<script src="assets/js/browser.min.js"></script>
-			<script src="assets/js/breakpoints.min.js"></script>
-			<script src="assets/js/util.js"></script>
-			<script src="assets/js/main.js"></script>
-
-	</body>
-</html>
+</section>
+{% endblock %}
