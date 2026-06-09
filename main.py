@@ -141,3 +141,12 @@ def add_challenge(
 
     # Po udanym dodaniu odświeżamy stronę admina (lub możemy przekierować na główną)
     return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+@app.get("/scoreboard")
+def show_scoreboard(request: Request, logged_in_user: str = Cookie(None)):
+    # Pokazuje tabelę wyników
+    return templates.TemplateResponse(request, "zerofour/scoreboard.html", {"request": request, "username": logged_in_user})
+
+@app.get("/rules")
+def show_rules(request: Request, logged_in_user: str = Cookie(None)):
+    # Pokazuje zasady gry
+    return templates.TemplateResponse(request, "zerofour/rules.html", {"request": request, "username": logged_in_user})

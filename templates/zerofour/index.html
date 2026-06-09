@@ -29,19 +29,20 @@
     <ul>
         <li class="current_page_item"><a href="/">Home</a></li>
         <li>
-            <a href="#">Menu rozwijane</a>
+    <a href="#">Platforma</a>
+    <ul>
+        <li><a href="/scoreboard">Tabela wyników (Scoreboard)</a></li>
+        <li><a href="/rules">Zasady i FAQ</a></li>
+        <li>
+            <a href="#">Kategorie zadań</a>
             <ul>
-                <li><a href="#">Moze nam sie przyda</a></li>
-                <li><a href="#">Rozwijane menu</a></li>
-                <li>
-                    <a href="#">A było w szablonie</a>
-                    <ul>
-                        <li><a href="#">Więc na razie zostawie</a></li>
-                        <li><a href="#">Coś tam coś tam</a></li>
-                    </ul>
-                </li>
+                <li><a href="#">Web Exploitation</a></li>
+                <li><a href="#">Cryptography</a></li>
+                <li><a href="#">Forensics</a></li>
             </ul>
         </li>
+    </ul>
+</li>
         
         {% if username %}
             {% if username == 'admin' %}
@@ -59,14 +60,42 @@
 								</div>
 							</header>
 
-						<div id="banner">
-								<h2>Tu bym wstawiła jakiś tekst jaka to super apka i zeby sie zalogowali zeby zadania robic</h2>
-								<p>Tu coś typu chcesz zacząc? Zarejestruj się!</p>
-                                
-                                <ul class="actions" style="justify-content: center; display: flex;">
-                                    <li><a href="/register" class="button large icon solid fa-check-circle">Zaczynamy</a></li>
-                                </ul>
-							</div>
+						<div id="banner" style="text-align:center !important;">
+
+    {% if username %}
+        <h2 style="text-align:center !important;">
+            Witaj z powrotem w panelu operacyjnym, {{ username }}!
+        </h2>
+
+        <p style="text-align:center !important; width:100%;">
+            System czeka na Twoje polecenia. Przewiń w dół, wybierz cel i zdobądź kolejną flagę.
+        </p>
+
+        <div style="text-align:center; margin-top:20px;">
+            <a href="#main-wrapper" class="button large icon solid fa-arrow-down">
+                Przejdź do zadań
+            </a>
+        </div>
+
+    {% else %}
+        <h2 style="text-align:center !important;">
+            Sprawdź swoje umiejętności w świecie cyberbezpieczeństwa
+        </h2>
+
+        <p style="text-align:center !important; width:100%;">
+            Rozwiązuj praktyczne zadania typu Capture The Flag, analizuj podatności i pnij się w rankingu.
+            <br>
+            Gotowy na wyzwanie? Załóż konto i dołącz do gry!
+        </p>
+
+        <div style="text-align:center; margin-top:20px;">
+            <a href="/register" class="button large icon solid fa-terminal">
+                Rozpocznij hackowanie
+            </a>
+        </div>
+    {% endif %}
+
+</div>
 
 					</div>
 				</div>
