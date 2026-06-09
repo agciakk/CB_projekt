@@ -1,0 +1,89 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<title>Panel Administratora - CTF</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<link rel="stylesheet" href="assets/css/main.css" />
+	</head>
+	<body class="no-sidebar is-preload">
+		<div id="page-wrapper">
+
+			<div id="header-wrapper">
+					<div class="container">
+						<header id="header">
+							<div class="inner">
+								<h1><a href="/" id="logo">Panel Admina</a></h1>
+								<nav id="nav">
+									<ul>
+										<li><a href="/">Home</a></li>
+										<li><a href="/logout" style="color: #ff6666;">Wyloguj się</a></li>
+									</ul>
+								</nav>
+							</div>
+						</header>
+					</div>
+				</div>
+
+			<div id="main-wrapper">
+					<div class="wrapper style1">
+						<div class="inner">
+							<section class="container box" style="max-width: 700px; margin: 0 auto; padding: 3em;">
+								<header class="major" style="text-align: center;">
+									<h2>Dodaj nowe wyzwanie CTF</h2>
+									<p>Wypełnij formularz, aby natychmiast opublikować zadanie dla graczy.</p>
+								</header>
+
+                                <form method="POST" action="/admin/add-challenge">
+									<div class="row gtr-50">
+										<div class="col-12">
+											<input type="text" name="title" placeholder="Tytuł zadania (np. Podatna wyszukiwarka)" required />
+										</div>
+										<div class="col-12">
+											<textarea name="description" placeholder="Opis zadania i wskazówki dla studenta..." rows="4" required></textarea>
+										</div>
+										<div class="col-6 col-12-small">
+											<select name="category" required style="width: 100%; padding: 0.5em; background: #222; color: #fff; border: 1px solid #444;">
+												<option value="" disabled selected>Wybierz kategorię...</option>
+												<option value="Web Exploitation">Web Exploitation</option>
+												<option value="Cryptography">Cryptography</option>
+												<option value="Forensics">Forensics</option>
+											</select>
+										</div>
+										<div class="col-6 col-12-small">
+											<input type="number" name="points" placeholder="Liczba punktów (np. 100)" required />
+										</div>
+										<div class="col-12">
+											<input type="text" name="flag" placeholder="Prawidłowa flaga (np. CTF{twoj_sekret})" required />
+										</div>
+										<div class="col-12" style="text-align: center; margin-top: 2em;">
+											<ul class="actions" style="display: inline-flex; justify-content: center; width: 100%;">
+												<li><input type="submit" class="button large" value="Opublikuj zadanie" /></li>
+											</ul>
+										</div>
+									</div>
+								</form>
+							</section>
+						</div>
+					</div>
+				</div>
+
+			<div id="footer-wrapper">
+					<div id="copyright" class="container">
+						<ul class="menu">
+							<li>&copy; Copyright © 2026 Nazwa. Panel Administratora</li>
+						</ul>
+					</div>
+				</div>
+
+		</div>
+
+		<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/jquery.dropotron.min.js"></script>
+			<script src="assets/js/browser.min.js"></script>
+			<script src="assets/js/breakpoints.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<script src="assets/js/main.js"></script>
+
+	</body>
+</html>

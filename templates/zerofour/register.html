@@ -1,0 +1,26 @@
+{% extends "zerofour/base.html" %}
+
+{% block content %}
+<section class="box" style="max-width: 500px; margin: 0 auto; padding: 3em;">
+    <header class="major" style="text-align: center;">
+        <h2>Rejestracja</h2>
+        <p>Załóż konto, aby rozwiązywać zadania CTF</p>
+    </header>
+
+    <form method="POST" action="/register">
+        <div class="row gtr-50">
+            <div class="col-12">
+                <input type="text" name="username" placeholder="Nazwa użytkownika" required />
+            </div>
+            <div class="col-12">
+                <input type="password" name="password" placeholder="Hasło" required />
+            </div>
+            <div class="col-12" style="text-align: center; margin-top: 1.5em;">
+                <ul class="actions" style="display: inline-flex; justify-content: center; width: 100%;">
+                    <li><input type="submit" class="button large" value="Zarejestruj się" /></li>
+                </ul>
+            </div>
+        </div>
+    </form>
+</section>
+{% endblock %}

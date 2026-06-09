@@ -1,0 +1,73 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<title>Symulator ataków i ćwiczeń CTF</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<link rel="stylesheet" href="/assets/css/main.css" />
+	</head>
+	<body class="homepage is-preload">
+		<div id="page-wrapper">
+
+			<div id="header-wrapper">
+    <div class="container">
+        <header id="header">
+    <div class="inner">
+        <h1>
+            <a href="/" id="logo">
+                {% if username %}
+                    Witaj, {{ username }}!
+                {% else %}
+                    Nazwa
+                {% endif %}
+            </a>
+        </h1>
+        
+        <nav id="nav">
+            <ul>
+                <li><a href="/">Home</a></li>
+                {% if username %}
+                    <li><a href="/logout" style="color: #ff6666;">Wyloguj się</a></li>
+                {% else %}
+                    <li><a href="/register">Zarejestruj się</a></li>
+                    <li><a href="/login">Zaloguj się</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+</header>
+    </div>
+</div>
+
+			<div id="main-wrapper">
+                <div class="wrapper style1">
+                    <div class="inner">
+                        {% block content %}
+                        {% endblock %}
+                    </div>
+                </div>
+            </div>
+
+			<div id="footer-wrapper">
+					<footer id="footer" class="container">
+						<div class="row">
+							<div class="col-12">
+								<div id="copyright">
+									<ul class="menu">
+										<li>&copy; Copyright © 2026 Nazwa. Wszelkie prawa zastrzeżone.</li>
+									</ul>
+								</div>
+							</div>
+						</div>
+					</footer>
+				</div>
+		</div>
+
+		<script src="/assets/js/jquery.min.js"></script>
+		<script src="/assets/js/jquery.dropotron.min.js"></script>
+		<script src="/assets/js/browser.min.js"></script>
+		<script src="/assets/js/breakpoints.min.js"></script>
+		<script src="/assets/js/util.js"></script>
+		<script src="/assets/js/main.js"></script>
+	</body>
+</html>

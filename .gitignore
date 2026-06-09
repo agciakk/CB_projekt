@@ -1,0 +1,14 @@
+# Ignorujemy bazy danych (nie wysyłamy haseł i użytkowników do sieci)
+*.db
+*.sqlite3
+
+# Ignorujemy środowisko wirtualne Pythona
+venv/
+env/
+
+# Ignorujemy pliki tymczasowe Pythona
+__pycache__/
+*.pyc
+
+# Ignorujemy pliki systemowe
+.DS_Store
