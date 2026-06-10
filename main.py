@@ -6,7 +6,7 @@ import os
 
 # --- Importy dla Bazy Danych ---
 from sqlalchemy.orm import Session
-from database import engine, Base, get_db
+from database import engine, Base, get_db, SessionLocal
 import models
 
 # --- Importy dla Szyfrowania Haseł ---
@@ -20,10 +20,12 @@ def get_password_hash(password):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
+# Tworzenie tabel
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+# Ścieżki
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 ZEROFOUR_DIR = os.path.join(TEMPLATES_DIR, "zerofour")
@@ -33,16 +35,66 @@ app.mount("/images", StaticFiles(directory=os.path.join(ZEROFOUR_DIR, "images"))
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+
+# ==========================================
+# FUNKCJA INICJALIZUJĄCA BAZĘ
+# ==========================================
+def init_database():
+    """Tworzy konto admina i przykładowe zadania przy starcie"""
+    db = SessionLocal()
+    try:
+        # Sprawdź czy admin istnieje
+        admin = db.query(models.User).filter(models.User.username == "admin").first()
+        if not admin:
+            admin_user = models.User(username="admin", password_hash=get_password_hash("admin"))
+            db.add(admin_user)
+            print("✅ Utworzono konto admina (login: admin, hasło: admin)")
+        
+        # Sprawdź czy są jakieś zadania
+        if db.query(models.Challenge).count() == 0:
+            testowe_zadania = [
+                models.Challenge(
+                    title="SQL Injection - Logowanie",
+                    description="Zaloguj się jako admin bez znajomości hasła. Podpowiedź: pole username jest podatne.",
+                    category="Web Exploitation",
+                    points=100,
+                    flag="CTF{sqli_admin_bypass}"
+                ),
+                models.Challenge(
+                    title="Szyfr Cezara",
+                    description="Odszyfruj wiadomość: WKH IODJ LV FVBHUVLP",
+                    category="Cryptography",
+                    points=80,
+                    flag="CTF{caesar_cipher_basics}"
+                ),
+                models.Challenge(
+                    title="Ukryty plik",
+                    description="W obrazku na stronie głównej ukryta jest flaga.",
+                    category="Forensics",
+                    points=120,
+                    flag="CTF{hidden_in_image}"
+                )
+            ]
+            db.add_all(testowe_zadania)
+            print("✅ Dodano 3 przykładowe zadania")
+        
+        db.commit()
+    except Exception as e:
+        print(f"❌ Błąd inicjalizacji: {e}")
+    finally:
+        db.close()
+
+# Uruchom inicjalizację
+init_database()
+
+
 # ==========================================
 # ENDPOINTY
 # ==========================================
 
 @app.get("/")
 def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    # Pobieramy wszystkie zadania z bazy
     all_challenges = db.query(models.Challenge).all()
-    
-    # Przekazujemy je do szablonu HTML pod zmienną "challenges"
     return templates.TemplateResponse(
         request, 
         "zerofour/index.html", 
@@ -52,13 +104,13 @@ def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Dep
             "challenges": all_challenges
         }
     )
+
 @app.get("/register")
 def show_register_form(request: Request, logged_in_user: str = Cookie(None)):
     return templates.TemplateResponse(request, "zerofour/register.html", {"request": request, "username": logged_in_user})
 
 @app.post("/register")
 def register_user(
-    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db)
@@ -66,11 +118,11 @@ def register_user(
     existing_user = db.query(models.User).filter(models.User.username == username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Nazwa użytkownika jest już zajęta!")
-
+    
     new_user = models.User(username=username, password_hash=get_password_hash(password))
     db.add(new_user)
     db.commit()
-    return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
 @app.get("/login")
 def show_login_form(request: Request, logged_in_user: str = Cookie(None)):
@@ -78,7 +130,6 @@ def show_login_form(request: Request, logged_in_user: str = Cookie(None)):
 
 @app.post("/login")
 def login_user(
-    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db)
@@ -86,34 +137,32 @@ def login_user(
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=400, detail="Nieprawidłowy login lub hasło!")
-
-    # Przekierowuje na stronę główną zamiast do "/dashboard"
+    
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     response.set_cookie(key="logged_in_user", value=user.username)
     return response
 
 @app.get("/logout")
 def logout():
-    # Usuwa ciasteczko i wraca na stronę główną
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     response.delete_cookie("logged_in_user")
     return response
+
 @app.get("/admin")
-def show_admin_panel(request: Request, logged_in_user: str = Cookie(None)):
-    # BEZPIECZEŃSTWO: Jeśli użytkownik nie jest zalogowany LUB jego nick to nie "admin"
+def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     if not logged_in_user or logged_in_user != "admin":
         raise HTTPException(status_code=403, detail="Brak dostępu! Tylko dla administratora.")
-
-    # Jeśli to admin, wpuszczamy go do panelu
+    
+    all_challenges = db.query(models.Challenge).all()
+    
     return templates.TemplateResponse(
         request, 
-        "zerofour/no-sidebar.html",  # Używamy szablonu bez pasków bocznych
-        {"request": request, "username": logged_in_user}
+        "zerofour/admin.html", 
+        {"request": request, "username": logged_in_user, "challenges": all_challenges}
     )
 
 @app.post("/admin/add-challenge")
 def add_challenge(
-    request: Request,
     title: str = Form(...),
     description: str = Form(...),
     category: str = Form(...),
@@ -122,11 +171,9 @@ def add_challenge(
     logged_in_user: str = Cookie(None),
     db: Session = Depends(get_db)
 ):
-    # Ponowna weryfikacja bezpieczeństwa przy wysyłaniu danych
     if not logged_in_user or logged_in_user != "admin":
         raise HTTPException(status_code=403, detail="Brak uprawnień!")
-
-    # Tworzymy nowy obiekt zadania na podstawie danych z formularza
+    
     new_challenge = models.Challenge(
         title=title,
         description=description,
@@ -134,19 +181,53 @@ def add_challenge(
         points=points,
         flag=flag
     )
-
-    # Zapisujemy w bazie danych
     db.add(new_challenge)
     db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
-    # Po udanym dodaniu odświeżamy stronę admina (lub możemy przekierować na główną)
-    return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+@app.post("/admin/delete-challenge")
+def delete_challenge(
+    challenge_id: int = Form(...),
+    logged_in_user: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    if not logged_in_user or logged_in_user != "admin":
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+    
+    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if challenge:
+        db.delete(challenge)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
+@app.post("/admin/edit-challenge")
+def edit_challenge(
+    challenge_id: int = Form(...),
+    title: str = Form(...),
+    description: str = Form(...),
+    category: str = Form(...),
+    points: int = Form(...),
+    flag: str = Form(...),
+    logged_in_user: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    if not logged_in_user or logged_in_user != "admin":
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+    
+    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if challenge:
+        challenge.title = title
+        challenge.description = description
+        challenge.category = category
+        challenge.points = points
+        challenge.flag = flag
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
 @app.get("/scoreboard")
 def show_scoreboard(request: Request, logged_in_user: str = Cookie(None)):
-    # Pokazuje tabelę wyników
     return templates.TemplateResponse(request, "zerofour/scoreboard.html", {"request": request, "username": logged_in_user})
 
 @app.get("/rules")
 def show_rules(request: Request, logged_in_user: str = Cookie(None)):
-    # Pokazuje zasady gry
     return templates.TemplateResponse(request, "zerofour/rules.html", {"request": request, "username": logged_in_user})
