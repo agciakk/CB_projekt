@@ -3,16 +3,14 @@
 {% block content %}
 <section class="container box" style="max-width: 800px; margin: 0 auto; padding: 3em;">
     <header class="major" style="text-align: center;">
-        <h2>Tajemniczy plik</h2>
+        <h2>{{ challenge.title }}</h2>
         <p style="color: #aaa;">
-            Forensics | 50 punktow
+            {{ challenge.category }} | {{ challenge.points }} punktow
         </p>
     </header>
 
-    <div style="margin: 2em 0; padding: 1em; background: rgba(255,255,255,0.05); border-radius: 10px;">
-        <p>Podczas rutynowego audytu wewnetrznego jeden z pracownikow dzialu IT natknal sie na podejrzany plik tekstowy. Twierdzi, ze znajduje sie w nim cos, co moze byc kluczem do glebszego problemu, ale nie jest w stanie tego zweryfikowac.</p>
-        <p>Plik wyglada jak zwykly raport, ale cos jest w nim nie tak... Moze to tylko przeoczenie, a moze celowo ukryta informacja?</p>
-        <p style="margin-top: 1em;">Twoim zadaniem jest dokladne przeanalizowanie tego pliku i znalezienie flagi.</p>
+    <div style="margin: 2em 0; padding: 1em; background: rgba(255,255,255,0.05); border-radius: 10px; text-align: justify; text-justify: inter-word;">
+        <p style="margin: 0;">{{ challenge.long_description if challenge.long_description else challenge.description }}</p>
     </div>
 
     <!-- Przycisk do pokazania wskazowki -->
@@ -23,9 +21,9 @@
     </div>
 
     <!-- Wskazowka (ukryta domyslnie) -->
-    <div id="hintBox" style="display: none; margin: 1.5em 0; padding: 1em; background: rgba(0,200,255,0.05); border-radius: 8px; border: 1px dashed #00ccff;">
+    <div id="hintBox" style="display: none; margin: 1.5em 0; padding: 1em; background: rgba(0,200,255,0.05); border-radius: 8px; border: 1px dashed #00ccff; text-align: justify; text-justify: inter-word;">
         <p style="margin: 0; font-size: 0.9em; color: #88ddff;">
-            <strong>Wskazowka:</strong> Pamiętaj, że znaleziona wiadomość jest zaszyfrowana.
+            <strong>Wskazowka:</strong> {{ challenge.hint if challenge.hint else "Brak wskazowki." }}
         </p>
     </div>
 
@@ -51,7 +49,7 @@
     </div>
 
     <div style="text-align: center; margin-top: 2em;">
-        <a href="/" class="button alt">Wroc do listy zadan</a>
+        <a href="/" class="button alt">Wróć do listy zadań</a>
     </div>
 </section>
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Cookie
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +41,31 @@ def init_database():
             admin_user = models.User(username="admin", password_hash=get_password_hash("admin"))
             db.add(admin_user)
             print("Utworzono konto admina (login: admin, haslo: admin)")
+        
+        if db.query(models.Challenge).count() == 0:
+            zadania = [
+                models.Challenge(
+                    title="Tajemniczy plik",
+                    description="Znajdź flagę ukrytą w tym pliku tekstowym.",
+                    long_description="Podczas rutynowego audytu wewnętrznego jeden z pracowników działu IT natknął się na podejrzany plik tekstowy. Twierdzi, że znajduje się w nim coś, co może być kluczem do głębszego problemu, ale nie jest w stanie tego zweryfikować. Plik wygląda jak zwykły raport, ale coś jest w nim nie tak... Może to tylko przeoczenie, a może celowo ukryta informacja? Twoim zadaniem jest dokładne przeanalizowanie tego pliku i znalezienie flagi.",
+                    hint="Zwróć szczególną uwagę na informacje, które wyglądają na nieprawidłowe lub nie na miejscu.",
+                    category="Forensics",
+                    points=50,
+                    flag="CTF{flaga_pliku_flag.txt}"
+                ),
+                models.Challenge(
+                    title="Szyfr Cezara",
+                    description="Odszyfruj zaszyfrowaną wiadomość.",
+                    long_description="Juliusz Cezar używał tego szyfru do komunikacji ze swoimi generałami. Polega on na przesunięciu każdej litery w alfabecie o stałą liczbę miejsc. Zaszyfrowana wiadomość: egact wq jgólxua. Twoim zadaniem jest odszyfrowanie tej wiadomości i znalezienie flagi. Flaga ma format: CTF{odszyfrowana_wiadomosc} (małymi literami, spacje zastąp podkreślnikami).",
+                    hint="Kluczem do tego zadania jest liczba 3.",
+                    category="Cryptography",
+                    points=100,
+                    flag="CTF{cezar_to_geniusz}"
+                )
+            ]
+            db.add_all(zadania)
+            print("Dodano zadania: Tajemniczy plik, Szyfr Cezara")
+        
         db.commit()
     except Exception as e:
         print(f"Blad inicjalizacji: {e}")
@@ -74,7 +100,7 @@ def register_user(
 ):
     existing_user = db.query(models.User).filter(models.User.username == username).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Nazwa uzytkownika jest juz zajeta!")
+        raise HTTPException(status_code=400, detail="Nazwa użytkownika jest już zajęta!")
     
     new_user = models.User(username=username, password_hash=get_password_hash(password))
     db.add(new_user)
@@ -93,7 +119,7 @@ def login_user(
 ):
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not verify_password(password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Nieprawidlowy login lub haslo!")
+        raise HTTPException(status_code=400, detail="Nieprawidłowy login lub hasło!")
     
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     response.set_cookie(key="logged_in_user", value=user.username)
@@ -108,7 +134,7 @@ def logout():
 @app.get("/admin")
 def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak dostepu! Tylko dla administratora.")
+        raise HTTPException(status_code=403, detail="Brak dostępu! Tylko dla administratora.")
     
     all_challenges = db.query(models.Challenge).all()
     
@@ -122,6 +148,8 @@ def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: S
 def add_challenge(
     title: str = Form(...),
     description: str = Form(...),
+    long_description: str = Form(None),
+    hint: str = Form(None),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
@@ -129,11 +157,13 @@ def add_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnien!")
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
     
     new_challenge = models.Challenge(
         title=title,
         description=description,
+        long_description=long_description or description,
+        hint=hint,
         category=category,
         points=points,
         flag=flag
@@ -149,7 +179,7 @@ def delete_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnien!")
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
     
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
@@ -162,6 +192,8 @@ def edit_challenge(
     challenge_id: int = Form(...),
     title: str = Form(...),
     description: str = Form(...),
+    long_description: str = Form(None),
+    hint: str = Form(None),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
@@ -169,12 +201,14 @@ def edit_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnien!")
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
     
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
         challenge.title = title
         challenge.description = description
+        challenge.long_description = long_description or description
+        challenge.hint = hint
         challenge.category = category
         challenge.points = points
         challenge.flag = flag
@@ -207,6 +241,7 @@ def download_file(challenge_id: int):
     
     file_map = {
         1: "tajemniczy_plik.txt",
+        2: "cezar.txt",
     }
     
     filename = file_map.get(challenge_id)
@@ -251,7 +286,7 @@ def check_flag(
                 "request": request,
                 "username": logged_in_user,
                 "challenge": challenge,
-                "message": "Niepoprawna flaga! Sprobuj ponownie.",
+                "message": "Niepoprawna flaga! Spróbuj ponownie.",
                 "solved": False
             }
         )
