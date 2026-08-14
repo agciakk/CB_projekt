@@ -1,15 +1,13 @@
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Cookie
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 import os
 
-# --- Importy dla Bazy Danych ---
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db, SessionLocal
 import models
 
-# --- Importy dla Szyfrowania Haseł ---
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -20,12 +18,10 @@ def get_password_hash(password):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-# Tworzenie tabel
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Ścieżki
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 ZEROFOUR_DIR = os.path.join(TEMPLATES_DIR, "zerofour")
@@ -36,61 +32,22 @@ app.mount("/images", StaticFiles(directory=os.path.join(ZEROFOUR_DIR, "images"))
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
-# ==========================================
-# FUNKCJA INICJALIZUJĄCA BAZĘ
-# ==========================================
 def init_database():
-    """Tworzy konto admina i przykładowe zadania przy starcie"""
     db = SessionLocal()
     try:
-        # Sprawdź czy admin istnieje
         admin = db.query(models.User).filter(models.User.username == "admin").first()
         if not admin:
             admin_user = models.User(username="admin", password_hash=get_password_hash("admin"))
             db.add(admin_user)
-            print("✅ Utworzono konto admina (login: admin, hasło: admin)")
-        
-        # Sprawdź czy są jakieś zadania
-        if db.query(models.Challenge).count() == 0:
-            testowe_zadania = [
-                models.Challenge(
-                    title="SQL Injection - Logowanie",
-                    description="Zaloguj się jako admin bez znajomości hasła. Podpowiedź: pole username jest podatne.",
-                    category="Web Exploitation",
-                    points=100,
-                    flag="CTF{sqli_admin_bypass}"
-                ),
-                models.Challenge(
-                    title="Szyfr Cezara",
-                    description="Odszyfruj wiadomość: WKH IODJ LV FVBHUVLP",
-                    category="Cryptography",
-                    points=80,
-                    flag="CTF{caesar_cipher_basics}"
-                ),
-                models.Challenge(
-                    title="Ukryty plik",
-                    description="W obrazku na stronie głównej ukryta jest flaga.",
-                    category="Forensics",
-                    points=120,
-                    flag="CTF{hidden_in_image}"
-                )
-            ]
-            db.add_all(testowe_zadania)
-            print("✅ Dodano 3 przykładowe zadania")
-        
+            print("Utworzono konto admina (login: admin, haslo: admin)")
         db.commit()
     except Exception as e:
-        print(f"❌ Błąd inicjalizacji: {e}")
+        print(f"Blad inicjalizacji: {e}")
     finally:
         db.close()
 
-# Uruchom inicjalizację
 init_database()
 
-
-# ==========================================
-# ENDPOINTY
-# ==========================================
 
 @app.get("/")
 def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
@@ -117,7 +74,7 @@ def register_user(
 ):
     existing_user = db.query(models.User).filter(models.User.username == username).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Nazwa użytkownika jest już zajęta!")
+        raise HTTPException(status_code=400, detail="Nazwa uzytkownika jest juz zajeta!")
     
     new_user = models.User(username=username, password_hash=get_password_hash(password))
     db.add(new_user)
@@ -136,7 +93,7 @@ def login_user(
 ):
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not verify_password(password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Nieprawidłowy login lub hasło!")
+        raise HTTPException(status_code=400, detail="Nieprawidlowy login lub haslo!")
     
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     response.set_cookie(key="logged_in_user", value=user.username)
@@ -151,7 +108,7 @@ def logout():
 @app.get("/admin")
 def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak dostępu! Tylko dla administratora.")
+        raise HTTPException(status_code=403, detail="Brak dostepu! Tylko dla administratora.")
     
     all_challenges = db.query(models.Challenge).all()
     
@@ -172,7 +129,7 @@ def add_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+        raise HTTPException(status_code=403, detail="Brak uprawnien!")
     
     new_challenge = models.Challenge(
         title=title,
@@ -192,7 +149,7 @@ def delete_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+        raise HTTPException(status_code=403, detail="Brak uprawnien!")
     
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
@@ -212,7 +169,7 @@ def edit_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+        raise HTTPException(status_code=403, detail="Brak uprawnien!")
     
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
@@ -231,3 +188,70 @@ def show_scoreboard(request: Request, logged_in_user: str = Cookie(None)):
 @app.get("/rules")
 def show_rules(request: Request, logged_in_user: str = Cookie(None)):
     return templates.TemplateResponse(request, "zerofour/rules.html", {"request": request, "username": logged_in_user})
+
+@app.get("/challenge/{challenge_id}")
+def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
+    
+    return templates.TemplateResponse(
+        request,
+        "zerofour/challenge.html",
+        {"request": request, "username": logged_in_user, "challenge": challenge}
+    )
+
+@app.get("/download/{challenge_id}")
+def download_file(challenge_id: int):
+    files_folder = os.path.join(BASE_DIR, "challenges_files")
+    
+    file_map = {
+        1: "tajemniczy_plik.txt",
+    }
+    
+    filename = file_map.get(challenge_id)
+    if not filename:
+        raise HTTPException(status_code=404, detail="Plik nie istnieje!")
+    
+    file_path = os.path.join(files_folder, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, filename=filename)
+    
+    raise HTTPException(status_code=404, detail="Plik nie istnieje!")
+
+@app.post("/challenge/{challenge_id}/check")
+def check_flag(
+    request: Request,
+    challenge_id: int,
+    flag: str = Form(...),
+    logged_in_user: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
+    
+    if flag.strip() == challenge.flag:
+        return templates.TemplateResponse(
+            request,
+            "zerofour/challenge.html",
+            {
+                "request": request,
+                "username": logged_in_user,
+                "challenge": challenge,
+                "message": "Poprawna flaga!",
+                "solved": True
+            }
+        )
+    else:
+        return templates.TemplateResponse(
+            request,
+            "zerofour/challenge.html",
+            {
+                "request": request,
+                "username": logged_in_user,
+                "challenge": challenge,
+                "message": "Niepoprawna flaga! Sprobuj ponownie.",
+                "solved": False
+            }
+        )
