@@ -17,20 +17,33 @@
                 </tr>
             </thead>
             <tbody>
+                {% for user in users %}
                 <tr>
-                    <td style="padding: 12px; border: 1px solid #444;">1</td>
-                    <td style="padding: 12px; border: 1px solid #444;"><strong>admin</strong></td>
-                    <td style="padding: 12px; border: 1px solid #444;">9999 pkt</td>
+                    <td style="padding: 12px; border: 1px solid #444;">
+                        {% if loop.index == 1 %}🥇
+                        {% elif loop.index == 2 %}🥈
+                        {% elif loop.index == 3 %}🥉
+                        {% else %}{{ loop.index }}{% endif %}
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #444;">
+                        <strong>{{ user.username }}</strong>
+                        {% if user.username == username %}
+                            <span style="color: #00c521; font-size: 0.8em;"> (Ty)</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #444;">{{ user.score }} pkt</td>
                 </tr>
-                {% if username and username != 'admin' %}
+                {% else %}
                 <tr>
-                    <td style="padding: 12px; border: 1px solid #444;">2</td>
-                    <td style="padding: 12px; border: 1px solid #444;">{{ username }}</td>
-                    <td style="padding: 12px; border: 1px solid #444;">0 pkt</td>
+                    <td colspan="3" style="padding: 12px; text-align: center; color: #aaa;">Brak zarejestrowanych użytkowników.</td>
                 </tr>
-                {% endif %}
+                {% endfor %}
             </tbody>
         </table>
+    </div>
+
+    <div style="text-align: center; margin-top: 2em;">
+        <a href="/" class="button alt">Wróć do listy zadań</a>
     </div>
 </section>
 {% endblock %}

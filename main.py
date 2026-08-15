@@ -40,7 +40,10 @@ def init_database():
         if not admin:
             admin_user = models.User(username="admin", password_hash=get_password_hash("admin"))
             db.add(admin_user)
+            db.commit()
             print("Utworzono konto admina (login: admin, haslo: admin)")
+        else:
+            print("Konto admina juz istnieje - pomijam.")
         
         if db.query(models.Challenge).count() == 0:
             zadania = [
@@ -48,7 +51,7 @@ def init_database():
                     title="Tajemniczy plik",
                     description="Znajdź flagę ukrytą w tym pliku tekstowym.",
                     long_description="Podczas rutynowego audytu wewnętrznego jeden z pracowników działu IT natknął się na podejrzany plik tekstowy. Twierdzi, że znajduje się w nim coś, co może być kluczem do głębszego problemu, ale nie jest w stanie tego zweryfikować. Plik wygląda jak zwykły raport, ale coś jest w nim nie tak... Może to tylko przeoczenie, a może celowo ukryta informacja? Twoim zadaniem jest dokładne przeanalizowanie tego pliku i znalezienie flagi.",
-                    hint="Zwróć szczególną uwagę na informacje, które wyglądają na nieprawidłowe lub nie na miejscu.",
+                    hint="Pamiętaj, że poszukiwana flaga jest zaszyfrowana.",
                     category="Forensics",
                     points=50,
                     flag="CTF{flaga_pliku_flag.txt}"
@@ -64,9 +67,11 @@ def init_database():
                 )
             ]
             db.add_all(zadania)
+            db.commit()
             print("Dodano zadania: Tajemniczy plik, Szyfr Cezara")
+        else:
+            print("Zadania juz istnieja - pomijam.")
         
-        db.commit()
     except Exception as e:
         print(f"Blad inicjalizacji: {e}")
     finally:
@@ -75,22 +80,39 @@ def init_database():
 init_database()
 
 
+def get_user_points(db: Session, username: str):
+    """Pomocnicza funkcja do pobierania punktów użytkownika"""
+    if username:
+        user = db.query(models.User).filter(models.User.username == username).first()
+        if user:
+            return user.score
+    return 0
+
+
 @app.get("/")
 def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     all_challenges = db.query(models.Challenge).all()
+    user_points = get_user_points(db, logged_in_user)
+    
     return templates.TemplateResponse(
         request, 
         "zerofour/index.html", 
         {
             "request": request, 
             "username": logged_in_user,
-            "challenges": all_challenges
+            "challenges": all_challenges,
+            "user_points": user_points
         }
     )
 
 @app.get("/register")
-def show_register_form(request: Request, logged_in_user: str = Cookie(None)):
-    return templates.TemplateResponse(request, "zerofour/register.html", {"request": request, "username": logged_in_user})
+def show_register_form(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+    user_points = get_user_points(db, logged_in_user)
+    return templates.TemplateResponse(
+        request, 
+        "zerofour/register.html", 
+        {"request": request, "username": logged_in_user, "user_points": user_points}
+    )
 
 @app.post("/register")
 def register_user(
@@ -108,8 +130,13 @@ def register_user(
     return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
 @app.get("/login")
-def show_login_form(request: Request, logged_in_user: str = Cookie(None)):
-    return templates.TemplateResponse(request, "zerofour/login.html", {"request": request, "username": logged_in_user})
+def show_login_form(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+    user_points = get_user_points(db, logged_in_user)
+    return templates.TemplateResponse(
+        request, 
+        "zerofour/login.html", 
+        {"request": request, "username": logged_in_user, "user_points": user_points}
+    )
 
 @app.post("/login")
 def login_user(
@@ -137,11 +164,12 @@ def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: S
         raise HTTPException(status_code=403, detail="Brak dostępu! Tylko dla administratora.")
     
     all_challenges = db.query(models.Challenge).all()
+    user_points = get_user_points(db, logged_in_user)
     
     return templates.TemplateResponse(
         request, 
         "zerofour/admin.html", 
-        {"request": request, "username": logged_in_user, "challenges": all_challenges}
+        {"request": request, "username": logged_in_user, "challenges": all_challenges, "user_points": user_points}
     )
 
 @app.post("/admin/add-challenge")
@@ -216,12 +244,29 @@ def edit_challenge(
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 @app.get("/scoreboard")
-def show_scoreboard(request: Request, logged_in_user: str = Cookie(None)):
-    return templates.TemplateResponse(request, "zerofour/scoreboard.html", {"request": request, "username": logged_in_user})
+def show_scoreboard(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+    users = db.query(models.User).order_by(models.User.score.desc()).all()
+    user_points = get_user_points(db, logged_in_user)
+    
+    return templates.TemplateResponse(
+        request,
+        "zerofour/scoreboard.html",
+        {
+            "request": request,
+            "username": logged_in_user,
+            "users": users,
+            "user_points": user_points
+        }
+    )
 
 @app.get("/rules")
-def show_rules(request: Request, logged_in_user: str = Cookie(None)):
-    return templates.TemplateResponse(request, "zerofour/rules.html", {"request": request, "username": logged_in_user})
+def show_rules(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+    user_points = get_user_points(db, logged_in_user)
+    return templates.TemplateResponse(
+        request, 
+        "zerofour/rules.html", 
+        {"request": request, "username": logged_in_user, "user_points": user_points}
+    )
 
 @app.get("/challenge/{challenge_id}")
 def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
@@ -229,10 +274,17 @@ def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Co
     if not challenge:
         raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
     
+    user_points = get_user_points(db, logged_in_user)
+    
     return templates.TemplateResponse(
         request,
         "zerofour/challenge.html",
-        {"request": request, "username": logged_in_user, "challenge": challenge}
+        {
+            "request": request,
+            "username": logged_in_user,
+            "challenge": challenge,
+            "user_points": user_points
+        }
     )
 
 @app.get("/download/{challenge_id}")
@@ -266,7 +318,9 @@ def check_flag(
     if not challenge:
         raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
     
-    if flag.strip() == challenge.flag:
+    user_points = get_user_points(db, logged_in_user)
+    
+    if not logged_in_user:
         return templates.TemplateResponse(
             request,
             "zerofour/challenge.html",
@@ -274,8 +328,67 @@ def check_flag(
                 "request": request,
                 "username": logged_in_user,
                 "challenge": challenge,
-                "message": "Poprawna flaga!",
-                "solved": True
+                "message": "Musisz być zalogowany, aby zdobyć punkty!",
+                "solved": False,
+                "user_points": user_points
+            }
+        )
+    
+    user = db.query(models.User).filter(models.User.username == logged_in_user).first()
+    if not user:
+        return templates.TemplateResponse(
+            request,
+            "zerofour/challenge.html",
+            {
+                "request": request,
+                "username": logged_in_user,
+                "challenge": challenge,
+                "message": "Nie znaleziono użytkownika!",
+                "solved": False,
+                "user_points": user_points
+            }
+        )
+    
+    existing_solve = db.query(models.Solve).filter(
+        models.Solve.user_id == user.id,
+        models.Solve.challenge_id == challenge.id
+    ).first()
+    
+    if existing_solve:
+        return templates.TemplateResponse(
+            request,
+            "zerofour/challenge.html",
+            {
+                "request": request,
+                "username": logged_in_user,
+                "challenge": challenge,
+                "message": f"Już rozwiązałeś to zadanie!",
+                "solved": True,
+                "user_points": user_points
+            }
+        )
+    
+    if flag.strip() == challenge.flag:
+        user.score += challenge.points
+        new_solve = models.Solve(
+            user_id=user.id,
+            challenge_id=challenge.id
+        )
+        db.add(new_solve)
+        db.commit()
+        
+        user_points = user.score
+        
+        return templates.TemplateResponse(
+            request,
+            "zerofour/challenge.html",
+            {
+                "request": request,
+                "username": logged_in_user,
+                "challenge": challenge,
+                "message": f"Poprawna flaga! +{challenge.points} punktów!",
+                "solved": True,
+                "user_points": user_points
             }
         )
     else:
@@ -287,6 +400,7 @@ def check_flag(
                 "username": logged_in_user,
                 "challenge": challenge,
                 "message": "Niepoprawna flaga! Spróbuj ponownie.",
-                "solved": False
+                "solved": False,
+                "user_points": user_points
             }
         )
