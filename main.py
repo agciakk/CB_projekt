@@ -19,7 +19,14 @@ def get_password_hash(password):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-Base.metadata.create_all(bind=engine)
+# SPRAWDŹ CZY BAZA ISTNIEJE ZANIM JĄ TWORZYSZ
+if not os.path.exists("ctf_platform.db"):
+    Base.metadata.create_all(bind=engine)
+    print("Utworzono nowa baze danych")
+else:
+    print("Baza danych juz istnieje")
+    # Nadal twórz tabele jeśli brakuje (np. dodano nowe kolumny)
+    Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -71,6 +78,10 @@ def init_database():
             print("Dodano zadania: Tajemniczy plik, Szyfr Cezara")
         else:
             print("Zadania juz istnieja - pomijam.")
+        
+        # Wyświetl ilość użytkowników w bazie (diagnostyka)
+        user_count = db.query(models.User).count()
+        print(f"Liczba uzytkownikow w bazie: {user_count}")
         
     except Exception as e:
         print(f"Blad inicjalizacji: {e}")
