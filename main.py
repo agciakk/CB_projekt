@@ -76,7 +76,7 @@ def init_database():
                     title="Podatna wyszukiwarka",
                     description="Znajdz luke w wyszukiwarce produktow i zdobadz flage.",
                     long_description="Firma CyberShop uruchomila wlasnie swoja nowa platforme e-commerce. Niestety, ktos zapomnial o zabezpieczeniach... Wyszukiwarka produktow jest podatna na SQL Injection. Twoim zadaniem jest ominiecie zabezpieczen i wyswietlenie wszystkich produktow, w tym ukrytego, ktory zawiera flage.",
-                    hint="Sprobuj wpisac cos w pole wyszukiwania, co sprawi, ze baza danych pokaze wszystko.",
+                    hint="Spróbuj wpisać coś w pole wyszukiwania, co sprawi, że baza danych pokaże wszystkie wpisy.",
                     category="Web Exploitation",
                     points=150,
                     flag="CTF{sql_injection_master}",
@@ -108,6 +108,7 @@ def get_user_points(db: Session, username: str):
     return 0
 
 
+
 @app.get("/")
 def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     all_challenges = db.query(models.Challenge).all()
@@ -127,10 +128,12 @@ def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Dep
 @app.get("/register")
 def show_register_form(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     user_points = get_user_points(db, logged_in_user)
+    error = request.query_params.get("error")
+    success = request.query_params.get("success")
     return templates.TemplateResponse(
         request, 
         "zerofour/register.html", 
-        {"request": request, "username": logged_in_user, "user_points": user_points}
+        {"request": request, "username": logged_in_user, "user_points": user_points, "error": error, "success": success}
     )
 
 @app.post("/register")
@@ -139,22 +142,27 @@ def register_user(
     password: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    if len(password) < 6:
+        return RedirectResponse(url="/register?error=Hasło musi mieć conajmniej 6 znaków!", status_code=status.HTTP_302_FOUND)
+    
     existing_user = db.query(models.User).filter(models.User.username == username).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Nazwa uzytkownika jest juz zajeta!")
+        return RedirectResponse(url="/register?error=Nazwa użytkownika jest już zajęta!", status_code=status.HTTP_302_FOUND)
     
     new_user = models.User(username=username, password_hash=get_password_hash(password))
     db.add(new_user)
     db.commit()
-    return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    return RedirectResponse(url="/login?success=Konto utworzone! Możesz się zalogować.", status_code=status.HTTP_302_FOUND)
 
 @app.get("/login")
 def show_login_form(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     user_points = get_user_points(db, logged_in_user)
+    error = request.query_params.get("error")
     return templates.TemplateResponse(
         request, 
         "zerofour/login.html", 
-        {"request": request, "username": logged_in_user, "user_points": user_points}
+        {"request": request, "username": logged_in_user, "user_points": user_points, "error": error}
     )
 
 @app.post("/login")
@@ -165,7 +173,7 @@ def login_user(
 ):
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not verify_password(password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Nieprawidlowy login lub haslo!")
+        return RedirectResponse(url="/login?error=Nieprawidłowy login lub hasło!", status_code=status.HTTP_302_FOUND)
     
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     response.set_cookie(key="logged_in_user", value=user.username)
@@ -180,7 +188,7 @@ def logout():
 @app.get("/admin")
 def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak dostepu! Tylko dla administratora.")
+        raise HTTPException(status_code=403, detail="Brak dostępu! Tylko dla administratora.")
     
     all_challenges = db.query(models.Challenge).all()
     user_points = get_user_points(db, logged_in_user)
@@ -205,7 +213,7 @@ def add_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnien!")
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
     
     new_challenge = models.Challenge(
         title=title,
@@ -228,7 +236,7 @@ def delete_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnien!")
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
     
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
@@ -251,7 +259,7 @@ def edit_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnien!")
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
     
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
