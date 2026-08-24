@@ -25,6 +25,7 @@ class Challenge(Base):
     category = Column(String, nullable=False)
     points = Column(Integer, nullable=False)
     flag = Column(String, nullable=False)
+    external_url = Column(String, nullable=True)
     
     solves = relationship("Solve", back_populates="challenge")
 

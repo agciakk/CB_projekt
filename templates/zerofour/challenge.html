@@ -28,9 +28,17 @@
     </div>
 
     <div style="text-align: center; margin: 2em 0;">
-        <a href="/download/{{ challenge.id }}" class="button large icon solid fa-download">
-            Pobierz plik
-        </a>
+        {% if challenge.external_url %}
+            <!-- Jeśli zadanie ma link zewnętrzny - pokaż przycisk "Otwórz stronę" -->
+            <a href="{{ challenge.external_url }}" target="_blank" class="button large icon solid fa-external-link-alt">
+                Otwórz stronę
+            </a>
+        {% else %}
+            <!-- Jeśli nie ma linku - pokaż "Pobierz plik" -->
+            <a href="/download/{{ challenge.id }}" class="button large icon solid fa-download">
+                Pobierz plik
+            </a>
+        {% endif %}
     </div>
 
     <div style="margin-top: 2em; padding: 1.5em; border-radius: 10px;">

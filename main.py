@@ -19,13 +19,11 @@ def get_password_hash(password):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-# SPRAWDŹ CZY BAZA ISTNIEJE ZANIM JĄ TWORZYSZ
 if not os.path.exists("ctf_platform.db"):
     Base.metadata.create_all(bind=engine)
     print("Utworzono nowa baze danych")
 else:
     print("Baza danych juz istnieje")
-    # Nadal twórz tabele jeśli brakuje (np. dodano nowe kolumny)
     Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -56,30 +54,41 @@ def init_database():
             zadania = [
                 models.Challenge(
                     title="Tajemniczy plik",
-                    description="Znajdź flagę ukrytą w tym pliku tekstowym.",
-                    long_description="Podczas rutynowego audytu wewnętrznego jeden z pracowników działu IT natknął się na podejrzany plik tekstowy. Twierdzi, że znajduje się w nim coś, co może być kluczem do głębszego problemu, ale nie jest w stanie tego zweryfikować. Plik wygląda jak zwykły raport, ale coś jest w nim nie tak... Może to tylko przeoczenie, a może celowo ukryta informacja? Twoim zadaniem jest dokładne przeanalizowanie tego pliku i znalezienie flagi.",
-                    hint="Pamiętaj, że poszukiwana flaga jest zaszyfrowana.",
+                    description="Znajdz flage ukryta w tym pliku tekstowym.",
+                    long_description="Podczas rutynowego audytu wewnetrznego jeden z pracownikow dzialu IT natknal sie na podejrzany plik tekstowy. Twierdzi, ze znajduje sie w nim cos, co moze byc kluczem do glebszego problemu, ale nie jest w stanie tego zweryfikowac. Plik wyglada jak zwykly raport, ale cos jest w nim nie tak... Moze to tylko przeoczenie, a moze celowo ukryta informacja? Twoim zadaniem jest dokladne przeanalizowanie tego pliku i znalezienie flagi.",
+                    hint="Pamietaj, ze poszukiwana flaga jest zaszyfrowana.",
                     category="Forensics",
                     points=50,
-                    flag="CTF{flaga_pliku_flag.txt}"
+                    flag="CTF{flaga_pliku_flag.txt}",
+                    external_url=None
                 ),
                 models.Challenge(
                     title="Szyfr Cezara",
-                    description="Odszyfruj zaszyfrowaną wiadomość.",
-                    long_description="Juliusz Cezar używał tego szyfru do komunikacji ze swoimi generałami. Polega on na przesunięciu każdej litery w alfabecie o stałą liczbę miejsc. Zaszyfrowana wiadomość: egact wq jgólxua. Twoim zadaniem jest odszyfrowanie tej wiadomości i znalezienie flagi. Flaga ma format: CTF{odszyfrowana_wiadomosc} (małymi literami, spacje zastąp podkreślnikami).",
+                    description="Odszyfruj zaszyfrowana wiadomosc.",
+                    long_description="Juliusz Cezar uzywal tego szyfru do komunikacji ze swoimi generalami. Polega on na przesunieciu kazdej litery w alfabecie o stala liczbe miejsc. Zaszyfrowana wiadomosc: egact wq jgolxua. Twoim zadaniem jest odszyfrowanie tej wiadomosci i znalezienie flagi. Flaga ma format: CTF{odszyfrowana_wiadomosc} (malymi literami, spacje zastap podkreslnikami).",
                     hint="Kluczem do tego zadania jest liczba 3.",
                     category="Cryptography",
                     points=100,
-                    flag="CTF{cezar_to_geniusz}"
+                    flag="CTF{cezar_to_geniusz}",
+                    external_url=None
+                ),
+                models.Challenge(
+                    title="Podatna wyszukiwarka",
+                    description="Znajdz luke w wyszukiwarce produktow i zdobadz flage.",
+                    long_description="Firma CyberShop uruchomila wlasnie swoja nowa platforme e-commerce. Niestety, ktos zapomnial o zabezpieczeniach... Wyszukiwarka produktow jest podatna na SQL Injection. Twoim zadaniem jest ominiecie zabezpieczen i wyswietlenie wszystkich produktow, w tym ukrytego, ktory zawiera flage.",
+                    hint="Sprobuj wpisac cos w pole wyszukiwania, co sprawi, ze baza danych pokaze wszystko.",
+                    category="Web Exploitation",
+                    points=150,
+                    flag="CTF{sql_injection_master}",
+                    external_url="http://127.0.0.1:5000"
                 )
             ]
             db.add_all(zadania)
             db.commit()
-            print("Dodano zadania: Tajemniczy plik, Szyfr Cezara")
+            print("Dodano zadania: Tajemniczy plik, Szyfr Cezara, Podatna wyszukiwarka")
         else:
             print("Zadania juz istnieja - pomijam.")
         
-        # Wyświetl ilość użytkowników w bazie (diagnostyka)
         user_count = db.query(models.User).count()
         print(f"Liczba uzytkownikow w bazie: {user_count}")
         
@@ -92,7 +101,6 @@ init_database()
 
 
 def get_user_points(db: Session, username: str):
-    """Pomocnicza funkcja do pobierania punktów użytkownika"""
     if username:
         user = db.query(models.User).filter(models.User.username == username).first()
         if user:
@@ -133,7 +141,7 @@ def register_user(
 ):
     existing_user = db.query(models.User).filter(models.User.username == username).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Nazwa użytkownika jest już zajęta!")
+        raise HTTPException(status_code=400, detail="Nazwa uzytkownika jest juz zajeta!")
     
     new_user = models.User(username=username, password_hash=get_password_hash(password))
     db.add(new_user)
@@ -157,7 +165,7 @@ def login_user(
 ):
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not verify_password(password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Nieprawidłowy login lub hasło!")
+        raise HTTPException(status_code=400, detail="Nieprawidlowy login lub haslo!")
     
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     response.set_cookie(key="logged_in_user", value=user.username)
@@ -172,7 +180,7 @@ def logout():
 @app.get("/admin")
 def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak dostępu! Tylko dla administratora.")
+        raise HTTPException(status_code=403, detail="Brak dostepu! Tylko dla administratora.")
     
     all_challenges = db.query(models.Challenge).all()
     user_points = get_user_points(db, logged_in_user)
@@ -192,11 +200,12 @@ def add_challenge(
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
+    external_url: str = Form(None),
     logged_in_user: str = Cookie(None),
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+        raise HTTPException(status_code=403, detail="Brak uprawnien!")
     
     new_challenge = models.Challenge(
         title=title,
@@ -205,7 +214,8 @@ def add_challenge(
         hint=hint,
         category=category,
         points=points,
-        flag=flag
+        flag=flag,
+        external_url=external_url
     )
     db.add(new_challenge)
     db.commit()
@@ -218,7 +228,7 @@ def delete_challenge(
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+        raise HTTPException(status_code=403, detail="Brak uprawnien!")
     
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
@@ -236,11 +246,12 @@ def edit_challenge(
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
+    external_url: str = Form(None),
     logged_in_user: str = Cookie(None),
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+        raise HTTPException(status_code=403, detail="Brak uprawnien!")
     
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
@@ -251,6 +262,7 @@ def edit_challenge(
         challenge.category = category
         challenge.points = points
         challenge.flag = flag
+        challenge.external_url = external_url
         db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
@@ -339,7 +351,7 @@ def check_flag(
                 "request": request,
                 "username": logged_in_user,
                 "challenge": challenge,
-                "message": "Musisz być zalogowany, aby zdobyć punkty!",
+                "message": "Musisz byc zalogowany, aby zdobyc punkty!",
                 "solved": False,
                 "user_points": user_points
             }
@@ -354,7 +366,7 @@ def check_flag(
                 "request": request,
                 "username": logged_in_user,
                 "challenge": challenge,
-                "message": "Nie znaleziono użytkownika!",
+                "message": "Nie znaleziono uzytkownika!",
                 "solved": False,
                 "user_points": user_points
             }
@@ -373,7 +385,7 @@ def check_flag(
                 "request": request,
                 "username": logged_in_user,
                 "challenge": challenge,
-                "message": f"Już rozwiązałeś to zadanie!",
+                "message": "Juz rozwiazales to zadanie!",
                 "solved": True,
                 "user_points": user_points
             }
@@ -397,7 +409,7 @@ def check_flag(
                 "request": request,
                 "username": logged_in_user,
                 "challenge": challenge,
-                "message": f"Poprawna flaga! +{challenge.points} punktów!",
+                "message": f"Poprawna flaga! +{challenge.points} punktow!",
                 "solved": True,
                 "user_points": user_points
             }
@@ -410,7 +422,7 @@ def check_flag(
                 "request": request,
                 "username": logged_in_user,
                 "challenge": challenge,
-                "message": "Niepoprawna flaga! Spróbuj ponownie.",
+                "message": "Niepoprawna flaga! Sprobuj ponownie.",
                 "solved": False,
                 "user_points": user_points
             }
