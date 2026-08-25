@@ -54,9 +54,9 @@ def init_database():
             zadania = [
                 models.Challenge(
                     title="Tajemniczy plik",
-                    description="Znajdz flage ukryta w tym pliku tekstowym.",
-                    long_description="Podczas rutynowego audytu wewnetrznego jeden z pracownikow dzialu IT natknal sie na podejrzany plik tekstowy. Twierdzi, ze znajduje sie w nim cos, co moze byc kluczem do glebszego problemu, ale nie jest w stanie tego zweryfikowac. Plik wyglada jak zwykly raport, ale cos jest w nim nie tak... Moze to tylko przeoczenie, a moze celowo ukryta informacja? Twoim zadaniem jest dokladne przeanalizowanie tego pliku i znalezienie flagi.",
-                    hint="Pamietaj, ze poszukiwana flaga jest zaszyfrowana.",
+                    description="Znajdź flagę ukrytą w tym pliku tekstowym.",
+                    long_description="Podczas rutynowego audytu wewnętrznego jeden z pracowników działu IT natknął się na podejrzany plik tekstowy. Twierdzi, że znajduje się w nim coś, co może być kluczem do głębszego problemu, ale nie jest w stanie tego zweryfikować. Plik wygląda jak zwykły raport, ale coś jest w nim nie tak... Może to tylko przeoczenie, a może celowo ukryta informacja? Twoim zadaniem jest dokładne przeanalizowanie tego pliku i znalezienie flagi.",
+                    hint="Pamiętaj, że poszukiwana flaga jest zaszyfrowana.",
                     category="Forensics",
                     points=50,
                     flag="CTF{flaga_pliku_flag.txt}",
@@ -64,8 +64,8 @@ def init_database():
                 ),
                 models.Challenge(
                     title="Szyfr Cezara",
-                    description="Odszyfruj zaszyfrowana wiadomosc.",
-                    long_description="Juliusz Cezar uzywal tego szyfru do komunikacji ze swoimi generalami. Polega on na przesunieciu kazdej litery w alfabecie o stala liczbe miejsc. Zaszyfrowana wiadomosc: egact wq jgolxua. Twoim zadaniem jest odszyfrowanie tej wiadomosci i znalezienie flagi. Flaga ma format: CTF{odszyfrowana_wiadomosc} (malymi literami, spacje zastap podkreslnikami).",
+                    description="Odszyfruj zaszyfrowaną wiadomość.",
+                    long_description="Juliusz Cezar używał tego szyfru do komunikacji ze swoimi generałami. Polega on na przesunięciu każdej litery w alfabecie o stałą liczbę miejsc. Zaszyfrowana wiadomość: egact wq jgólxua. Twoim zadaniem jest odszyfrowanie tej wiadomości i znalezienie flagi. Flaga ma format: CTF{odszyfrowana_wiadomosc} (małymi literami, spacje zastąp podkreślnikami).",
                     hint="Kluczem do tego zadania jest liczba 3.",
                     category="Cryptography",
                     points=100,
@@ -74,8 +74,8 @@ def init_database():
                 ),
                 models.Challenge(
                     title="Podatna wyszukiwarka",
-                    description="Znajdz luke w wyszukiwarce produktow i zdobadz flage.",
-                    long_description="Firma CyberShop uruchomila wlasnie swoja nowa platforme e-commerce. Niestety, ktos zapomnial o zabezpieczeniach... Wyszukiwarka produktow jest podatna na SQL Injection. Twoim zadaniem jest ominiecie zabezpieczen i wyswietlenie wszystkich produktow, w tym ukrytego, ktory zawiera flage.",
+                    description="Znajdź lukę w wyszukiwarce produktów i zdobądź flagę.",
+                    long_description="Firma CyberShop uruchomiła właśnie swoją nową platformę e-commerce. Niestety, ktoś zapomniał o zabezpieczeniach... Wyszukiwarka produktów jest podatna na SQL Injection. Twoim zadaniem jest ominięcie zabezpieczeń i wyświetlenie wszystkich produktów, w tym ukrytego, który zawiera flagę.",
                     hint="Spróbuj wpisać coś w pole wyszukiwania, co sprawi, że baza danych pokaże wszystkie wpisy.",
                     category="Web Exploitation",
                     points=150,
@@ -85,7 +85,7 @@ def init_database():
             ]
             db.add_all(zadania)
             db.commit()
-            print("Dodano zadania: Tajemniczy plik, Szyfr Cezara, Podatna wyszukiwarka")
+            print("Dodano zadania.")
         else:
             print("Zadania juz istnieja - pomijam.")
         
@@ -108,7 +108,6 @@ def get_user_points(db: Session, username: str):
     return 0
 
 
-
 @app.get("/")
 def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
     all_challenges = db.query(models.Challenge).all()
@@ -121,7 +120,8 @@ def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Dep
             "request": request, 
             "username": logged_in_user,
             "challenges": all_challenges,
-            "user_points": user_points
+            "user_points": user_points,
+            "active_page": "home"
         }
     )
 
@@ -133,7 +133,14 @@ def show_register_form(request: Request, logged_in_user: str = Cookie(None), db:
     return templates.TemplateResponse(
         request, 
         "zerofour/register.html", 
-        {"request": request, "username": logged_in_user, "user_points": user_points, "error": error, "success": success}
+        {
+            "request": request, 
+            "username": logged_in_user, 
+            "user_points": user_points, 
+            "error": error, 
+            "success": success,
+            "active_page": "register"
+        }
     )
 
 @app.post("/register")
@@ -162,7 +169,13 @@ def show_login_form(request: Request, logged_in_user: str = Cookie(None), db: Se
     return templates.TemplateResponse(
         request, 
         "zerofour/login.html", 
-        {"request": request, "username": logged_in_user, "user_points": user_points, "error": error}
+        {
+            "request": request, 
+            "username": logged_in_user, 
+            "user_points": user_points, 
+            "error": error,
+            "active_page": "login"
+        }
     )
 
 @app.post("/login")
@@ -196,7 +209,13 @@ def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: S
     return templates.TemplateResponse(
         request, 
         "zerofour/admin.html", 
-        {"request": request, "username": logged_in_user, "challenges": all_challenges, "user_points": user_points}
+        {
+            "request": request, 
+            "username": logged_in_user, 
+            "challenges": all_challenges, 
+            "user_points": user_points,
+            "active_page": "admin"
+        }
     )
 
 @app.post("/admin/add-challenge")
@@ -286,7 +305,8 @@ def show_scoreboard(request: Request, logged_in_user: str = Cookie(None), db: Se
             "request": request,
             "username": logged_in_user,
             "users": users,
-            "user_points": user_points
+            "user_points": user_points,
+            "active_page": "scoreboard"
         }
     )
 
@@ -296,7 +316,12 @@ def show_rules(request: Request, logged_in_user: str = Cookie(None), db: Session
     return templates.TemplateResponse(
         request, 
         "zerofour/rules.html", 
-        {"request": request, "username": logged_in_user, "user_points": user_points}
+        {
+            "request": request, 
+            "username": logged_in_user, 
+            "user_points": user_points,
+            "active_page": "rules"
+        }
     )
 
 @app.get("/challenge/{challenge_id}")
@@ -314,7 +339,8 @@ def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Co
             "request": request,
             "username": logged_in_user,
             "challenge": challenge,
-            "user_points": user_points
+            "user_points": user_points,
+            "active_page": "challenge"
         }
     )
 
@@ -361,7 +387,8 @@ def check_flag(
                 "challenge": challenge,
                 "message": "Musisz byc zalogowany, aby zdobyc punkty!",
                 "solved": False,
-                "user_points": user_points
+                "user_points": user_points,
+                "active_page": "challenge"
             }
         )
     
@@ -376,7 +403,8 @@ def check_flag(
                 "challenge": challenge,
                 "message": "Nie znaleziono uzytkownika!",
                 "solved": False,
-                "user_points": user_points
+                "user_points": user_points,
+                "active_page": "challenge"
             }
         )
     
@@ -395,7 +423,8 @@ def check_flag(
                 "challenge": challenge,
                 "message": "Juz rozwiazales to zadanie!",
                 "solved": True,
-                "user_points": user_points
+                "user_points": user_points,
+                "active_page": "challenge"
             }
         )
     
@@ -419,7 +448,8 @@ def check_flag(
                 "challenge": challenge,
                 "message": f"Poprawna flaga! +{challenge.points} punktow!",
                 "solved": True,
-                "user_points": user_points
+                "user_points": user_points,
+                "active_page": "challenge"
             }
         )
     else:
@@ -432,6 +462,7 @@ def check_flag(
                 "challenge": challenge,
                 "message": "Niepoprawna flaga! Sprobuj ponownie.",
                 "solved": False,
-                "user_points": user_points
+                "user_points": user_points,
+                "active_page": "challenge"
             }
         )

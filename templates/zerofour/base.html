@@ -24,25 +24,21 @@
             
                         <nav id="nav">
                             <ul>
-                                <li class="current_page_item"><a href="/">Home</a></li>
-                                <li>
-                                    <a href="#">Platforma</a>
-                                    <ul>
-                                        <li><a href="/scoreboard">Tabela wyników (Scoreboard)</a></li>
-                                        <li><a href="/rules">Zasady i FAQ</a></li>
-                                        <li>
-                                            <a href="#">Kategorie zadań</a>
-                                            <ul>
-                                                <li><a href="#">Web Exploitation</a></li>
-                                                <li><a href="#">Cryptography</a></li>
-                                                <li><a href="#">Forensics</a></li>
-                                            </ul>
-                                        </li>
-                                    </ul>
+                                <li {% if active_page == 'home' %}class="current_page_item"{% endif %}>
+                                    <a href="/">Home</a>
                                 </li>
+                                <li {% if active_page == 'scoreboard' %}class="current_page_item"{% endif %}>
+                                    <a href="/scoreboard">Scoreboard</a>
+                                </li>
+                                <li {% if active_page == 'rules' %}class="current_page_item"{% endif %}>
+                                    <a href="/rules">Zasady i FAQ</a>
+                                </li>
+                                
                                 {% if username %}
                                     {% if username == 'admin' %}
-                                        <li><a href="/admin" style="color: #66b3ff;">Panel Administratora</a></li>
+                                        <li {% if active_page == 'admin' %}class="current_page_item"{% endif %}>
+                                            <a href="/admin" style="color: #66b3ff;">Panel Administratora</a>
+                                        </li>
                                     {% endif %}
                                     
                                     <li><a href="/logout" style="color: #ff6666;">Wyloguj się</a></li>
