@@ -109,9 +109,19 @@ def get_user_points(db: Session, username: str):
 
 
 @app.get("/")
-def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    all_challenges = db.query(models.Challenge).all()
+def home(
+    request: Request, 
+    logged_in_user: str = Cookie(None), 
+    category: str = None,
+    db: Session = Depends(get_db)
+):
     user_points = get_user_points(db, logged_in_user)
+    
+    # Filtruj zadania jeśli wybrano kategorię
+    query = db.query(models.Challenge)
+    if category:
+        query = query.filter(models.Challenge.category == category)
+    all_challenges = query.all()
     
     return templates.TemplateResponse(
         request, 
@@ -121,7 +131,8 @@ def home(request: Request, logged_in_user: str = Cookie(None), db: Session = Dep
             "username": logged_in_user,
             "challenges": all_challenges,
             "user_points": user_points,
-            "active_page": "home"
+            "active_page": "home",
+            "selected_category": category
         }
     )
 
