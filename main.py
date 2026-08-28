@@ -340,7 +340,7 @@ def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Co
             "username": logged_in_user,
             "challenge": challenge,
             "user_points": user_points,
-            "active_page": "challenge"
+            "active_page": "home"
         }
     )
 
@@ -388,7 +388,7 @@ def check_flag(
                 "message": "Musisz byc zalogowany, aby zdobyc punkty!",
                 "solved": False,
                 "user_points": user_points,
-                "active_page": "challenge"
+                "active_page": "home"
             }
         )
     
@@ -404,7 +404,7 @@ def check_flag(
                 "message": "Nie znaleziono uzytkownika!",
                 "solved": False,
                 "user_points": user_points,
-                "active_page": "challenge"
+                "active_page": "home"
             }
         )
     
@@ -424,7 +424,7 @@ def check_flag(
                 "message": "Juz rozwiazales to zadanie!",
                 "solved": True,
                 "user_points": user_points,
-                "active_page": "challenge"
+                "active_page": "home"
             }
         )
     
@@ -449,7 +449,7 @@ def check_flag(
                 "message": f"Poprawna flaga! +{challenge.points} punktow!",
                 "solved": True,
                 "user_points": user_points,
-                "active_page": "challenge"
+                "active_page": "home"
             }
         )
     else:
@@ -463,6 +463,6 @@ def check_flag(
                 "message": "Niepoprawna flaga! Sprobuj ponownie.",
                 "solved": False,
                 "user_points": user_points,
-                "active_page": "challenge"
+                "active_page": "home"
             }
         )

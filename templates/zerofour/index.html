@@ -24,8 +24,9 @@
         <div class="col-12">
             <header class="first major">
                 <h2>Wyzwania CTF</h2>
-                <p>Zaloguj się, wybierz zadanie i zdobywaj punkty dla swojego zespołu!</p>
+                <p>Zaloguj się, rozwiązuj zadania i zdobywaj punkty!</p>
             </header>
+            <p>tu bym dodala filtr do kategorii zadan</p>
         </div>
 
         {% for challenge in challenges %}
@@ -44,7 +45,7 @@
                 {% if username %}
                     <a href="/challenge/{{ challenge.id }}" class="button alt">Rozwiąż</a>
                 {% else %}
-                    <p style="color: #aaa; font-size: 0.9em;">Zaloguj się, aby rozwiązać</p>
+                    <p style="color: #aaa; font-size: 0.9em;"><a href="/login">Zaloguj się</a>, aby rozwiązać</p>
                 {% endif %}
             </section>
         </div>
