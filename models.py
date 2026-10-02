@@ -26,8 +26,9 @@ class Challenge(Base):
     points = Column(Integer, nullable=False)
     flag = Column(String, nullable=False)
     external_url = Column(String, nullable=True)
+    file_name = Column(String, nullable=True)
     
-    solves = relationship("Solve", back_populates="challenge")
+    solves = relationship("Solve", back_populates="challenge", cascade="all, delete-orphan")
 
 
 class Solve(Base):

@@ -117,7 +117,6 @@ def home(
 ):
     user_points = get_user_points(db, logged_in_user)
     
-    # Filtruj zadania jeśli wybrano kategorię
     query = db.query(models.Challenge)
     if category:
         query = query.filter(models.Challenge.category == category)
@@ -235,15 +234,25 @@ def add_challenge(
     description: str = Form(...),
     long_description: str = Form(None),
     hint: str = Form(None),
+    resource_type: str = Form(...),
+    external_url: str = Form(None),
+    file_name: str = Form(None),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
-    external_url: str = Form(None),
     logged_in_user: str = Cookie(None),
     db: Session = Depends(get_db)
 ):
     if not logged_in_user or logged_in_user != "admin":
         raise HTTPException(status_code=403, detail="Brak uprawnień!")
+    
+    final_url = None
+    final_file = None
+    
+    if resource_type == 'url' and external_url:
+        final_url = external_url
+    elif resource_type == 'file' and file_name:
+        final_file = file_name
     
     new_challenge = models.Challenge(
         title=title,
@@ -253,26 +262,13 @@ def add_challenge(
         category=category,
         points=points,
         flag=flag,
-        external_url=external_url
+        external_url=final_url,
+        file_name=final_file
     )
     db.add(new_challenge)
     db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
-@app.post("/admin/delete-challenge")
-def delete_challenge(
-    challenge_id: int = Form(...),
-    logged_in_user: str = Cookie(None),
-    db: Session = Depends(get_db)
-):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
-    
-    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
-    if challenge:
-        db.delete(challenge)
-        db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 @app.post("/admin/edit-challenge")
 def edit_challenge(
@@ -281,10 +277,12 @@ def edit_challenge(
     description: str = Form(...),
     long_description: str = Form(None),
     hint: str = Form(None),
+    resource_type: str = Form(...),
+    external_url: str = Form(None),
+    file_name: str = Form(None),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
-    external_url: str = Form(None),
     logged_in_user: str = Cookie(None),
     db: Session = Depends(get_db)
 ):
@@ -300,8 +298,36 @@ def edit_challenge(
         challenge.category = category
         challenge.points = points
         challenge.flag = flag
-        challenge.external_url = external_url
+        
+        if resource_type == 'url' and external_url:
+            challenge.external_url = external_url
+            challenge.file_name = None
+        elif resource_type == 'file' and file_name:
+            challenge.file_name = file_name
+            challenge.external_url = None
+        else:
+            challenge.external_url = None
+            challenge.file_name = None
+        
         db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
+@app.post("/admin/delete-challenge")
+def delete_challenge(
+    challenge_id: int = Form(...),
+    logged_in_user: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    if not logged_in_user or logged_in_user != "admin":
+        raise HTTPException(status_code=403, detail="Brak uprawnień!")
+    
+    db.query(models.Solve).filter(models.Solve.challenge_id == challenge_id).delete()
+    
+    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if challenge:
+        db.delete(challenge)
+        db.commit()
+    
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 @app.get("/scoreboard")
@@ -356,23 +382,21 @@ def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Co
     )
 
 @app.get("/download/{challenge_id}")
-def download_file(challenge_id: int):
+def download_file(challenge_id: int, db: Session = Depends(get_db)):
+    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
+    
+    if not challenge.file_name:
+        raise HTTPException(status_code=404, detail="To zadanie nie ma pliku do pobrania!")
+    
     files_folder = os.path.join(BASE_DIR, "challenges_files")
+    file_path = os.path.join(files_folder, challenge.file_name)
     
-    file_map = {
-        1: "tajemniczy_plik.txt",
-        2: "cezar.txt",
-    }
-    
-    filename = file_map.get(challenge_id)
-    if not filename:
-        raise HTTPException(status_code=404, detail="Plik nie istnieje!")
-    
-    file_path = os.path.join(files_folder, filename)
     if os.path.exists(file_path):
-        return FileResponse(file_path, filename=filename)
+        return FileResponse(file_path, filename=challenge.file_name)
     
-    raise HTTPException(status_code=404, detail="Plik nie istnieje!")
+    raise HTTPException(status_code=404, detail="Plik nie istnieje na serwerze!")
 
 @app.post("/challenge/{challenge_id}/check")
 def check_flag(

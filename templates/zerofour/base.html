@@ -130,5 +130,62 @@
     <script src="/assets/js/breakpoints.min.js"></script>
     <script src="/assets/js/util.js"></script>
     <script src="/assets/js/main.js"></script>
+
+    <!-- MODAL EDYCJI -->
+    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 999999; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 40px 20px;">
+        <div style="background: #fff; max-width: 600px; width: 90%; padding: 30px; border-radius: 15px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); margin: auto;">
+            <h2 style="text-align: center; margin-bottom: 20px; color: #404248; font-size: 1.6em; text-transform: uppercase; font-weight: 800;">Edytuj zadanie</h2>
+            <form method="POST" action="/admin/edit-challenge" id="editForm">
+                <input type="hidden" name="challenge_id" id="edit_id">
+                <div class="row gtr-50">
+                    <div class="col-12">
+                        <input type="text" name="title" id="edit_title" placeholder="Tytuł" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                    </div>
+                    <div class="col-12">
+                        <textarea name="description" id="edit_description" placeholder="Krótki opis" rows="2" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <textarea name="long_description" id="edit_long_description" placeholder="Długi opis" rows="4" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <input type="text" name="hint" id="edit_hint" placeholder="Wskazówka" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                    </div>
+                    <div class="col-12">
+                        <select name="resource_type" id="resource_type_edit" onchange="toggleResourceFields('edit')" style="width:100%; padding:10px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                            <option value="none">Brak pliku/linku</option>
+                            <option value="file">Plik do pobrania</option>
+                            <option value="url">Link do zewnętrznej strony</option>
+                        </select>
+                    </div>
+                    <div class="col-12" id="url_field_edit" style="display: none;">
+                        <input type="text" name="external_url" id="edit_external_url" placeholder="Link" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                    </div>
+                    <div class="col-12" id="file_field_edit" style="display: none;">
+                        <input type="text" name="file_name" id="edit_file_name" placeholder="Nazwa pliku" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                    </div>
+                    <div class="col-6 col-12-small">
+                        <select name="category" id="edit_category" style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                            <option value="Web Exploitation">Web Exploitation</option>
+                            <option value="Cryptography">Cryptography</option>
+                            <option value="Forensics">Forensics</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-12-small">
+                        <input type="number" name="points" id="edit_points" placeholder="Punkty" required style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                    </div>
+                    <div class="col-12">
+                        <input type="text" name="flag" id="edit_flag" placeholder="Flaga" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
+                    </div>
+                    <div class="col-12" style="text-align: center;">
+                        <ul class="actions" style="display: inline-flex; justify-content: center; gap: 1em; margin: 0;">
+                            <li><button type="submit" class="button" style="background:#4091bf; color:#fff; border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer;">Zapisz</button></li>
+                            <li><button type="button" class="button alt" onclick="closeEditModal()" style="background:#464a52; color:#fff; border:none; padding:12px 30px; border-radius:8px; cursor:pointer;">Anuluj</button></li>
+                        </ul>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </body>
 </html>

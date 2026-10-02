@@ -29,15 +29,15 @@
 
     <div style="text-align: center; margin: 2em 0;">
         {% if challenge.external_url %}
-            <!-- Jeśli zadanie ma link zewnętrzny - pokaż przycisk "Otwórz stronę" -->
             <a href="{{ challenge.external_url }}" target="_blank" class="button large icon solid fa-external-link-alt">
                 Otwórz stronę
             </a>
-        {% else %}
-            <!-- Jeśli nie ma linku - pokaż "Pobierz plik" -->
+        {% elif challenge.file_name %}
             <a href="/download/{{ challenge.id }}" class="button large icon solid fa-download">
                 Pobierz plik
             </a>
+        {% else %}
+            <p style="color: #666; font-style: italic;">Brak pliku do pobrania.</p>
         {% endif %}
     </div>
 
