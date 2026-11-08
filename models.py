@@ -27,6 +27,7 @@ class Challenge(Base):
     flag = Column(String, nullable=False)
     external_url = Column(String, nullable=True)
     file_name = Column(String, nullable=True)
+    docker_image = Column(String, nullable=True)
     
     solves = relationship("Solve", back_populates="challenge", cascade="all, delete-orphan")
 

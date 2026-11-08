@@ -8,6 +8,10 @@ import os
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db, SessionLocal
 import models
+import docker
+import random
+import threading
+import time
 
 from passlib.context import CryptContext
 
@@ -39,6 +43,11 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 def init_database():
+    # Sprawdź czy baza była już zainicjalizowana
+    if os.path.exists(".db_initialized"):
+        print("Baza już zainicjalizowana - pomijam init_database().")
+        return
+    
     db = SessionLocal()
     try:
         admin = db.query(models.User).filter(models.User.username == "admin").first()
@@ -60,7 +69,9 @@ def init_database():
                     category="Forensics",
                     points=50,
                     flag="CTF{flaga_pliku_flag.txt}",
-                    external_url=None
+                    external_url=None,
+                    file_name="tajemniczy_plik.txt",
+                    docker_image=None
                 ),
                 models.Challenge(
                     title="Szyfr Cezara",
@@ -70,7 +81,9 @@ def init_database():
                     category="Cryptography",
                     points=100,
                     flag="CTF{cezar_to_geniusz}",
-                    external_url=None
+                    external_url=None,
+                    file_name="cezar.txt",
+                    docker_image=None
                 ),
                 models.Challenge(
                     title="Podatna wyszukiwarka",
@@ -80,7 +93,9 @@ def init_database():
                     category="Web Exploitation",
                     points=150,
                     flag="CTF{sql_injection_master}",
-                    external_url="http://127.0.0.1:5000"
+                    external_url=None,
+                    file_name=None,
+                    docker_image="web-sqli-challenge"
                 )
             ]
             db.add_all(zadania)
@@ -91,6 +106,11 @@ def init_database():
         
         user_count = db.query(models.User).count()
         print(f"Liczba uzytkownikow w bazie: {user_count}")
+        
+        # Utwórz plik flagi - init_database() nie będzie już nigdy uruchamiane
+        with open(".db_initialized", "w") as f:
+            f.write("initialized")
+        print("Baza zainicjalizowana - utworzono .db_initialized")
         
     except Exception as e:
         print(f"Blad inicjalizacji: {e}")
@@ -237,6 +257,7 @@ def add_challenge(
     resource_type: str = Form(...),
     external_url: str = Form(None),
     file_name: str = Form(None),
+    docker_image: str = Form(None),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
@@ -248,11 +269,14 @@ def add_challenge(
     
     final_url = None
     final_file = None
+    final_docker = None
     
     if resource_type == 'url' and external_url:
         final_url = external_url
     elif resource_type == 'file' and file_name:
         final_file = file_name
+    elif resource_type == 'docker' and docker_image:
+        final_docker = docker_image
     
     new_challenge = models.Challenge(
         title=title,
@@ -263,7 +287,8 @@ def add_challenge(
         points=points,
         flag=flag,
         external_url=final_url,
-        file_name=final_file
+        file_name=final_file,
+        docker_image=final_docker
     )
     db.add(new_challenge)
     db.commit()
@@ -280,6 +305,7 @@ def edit_challenge(
     resource_type: str = Form(...),
     external_url: str = Form(None),
     file_name: str = Form(None),
+    docker_image: str = Form(None),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
@@ -302,12 +328,19 @@ def edit_challenge(
         if resource_type == 'url' and external_url:
             challenge.external_url = external_url
             challenge.file_name = None
+            challenge.docker_image = None
         elif resource_type == 'file' and file_name:
             challenge.file_name = file_name
             challenge.external_url = None
+            challenge.docker_image = None
+        elif resource_type == 'docker' and docker_image:
+            challenge.docker_image = docker_image
+            challenge.external_url = None
+            challenge.file_name = None
         else:
             challenge.external_url = None
             challenge.file_name = None
+            challenge.docker_image = None
         
         db.commit()
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
@@ -501,3 +534,118 @@ def check_flag(
                 "active_page": "home"
             }
         )
+
+
+# Globalny klient Docker
+docker_client = docker.from_env()
+
+# Słownik do śledzenia uruchomionych kontenerów
+running_containers = {}
+
+@app.post("/challenge/{challenge_id}/start-docker")
+def start_docker_challenge(
+    challenge_id: int,
+    logged_in_user: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    if not logged_in_user:
+        raise HTTPException(status_code=401, detail="Musisz być zalogowany!")
+    
+    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if not challenge or not challenge.docker_image:
+        raise HTTPException(status_code=404, detail="To zadanie nie ma obrazu Docker!")
+    
+    container_key = f"{logged_in_user}_{challenge_id}"
+    if container_key in running_containers:
+        old_container = running_containers[container_key]
+        try:
+            old_container['container'].remove(force=True)
+        except:
+            pass
+    
+    try:
+        used_ports = {c['port'] for c in running_containers.values()}
+        port = random.randint(30000, 31000)
+        while port in used_ports:
+            port = random.randint(30000, 31000)
+        
+        container = docker_client.containers.run(
+            challenge.docker_image,
+            detach=True,
+            ports={'7000/tcp': port},
+            remove=False,
+            mem_limit='256m',
+            cpu_period=100000,
+            cpu_quota=50000,
+            network_disabled=False
+        )
+        
+        running_containers[container_key] = {
+            'container': container,
+            'port': port,
+            'challenge_id': challenge_id,
+            'username': logged_in_user
+        }
+        
+        return {
+            "status": "started",
+            "url": f"http://127.0.0.1:{port}",
+            "port": port,
+            "message": f"Kontener uruchomiony. Otwórz: http://127.0.0.1:{port}"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Błąd uruchamiania kontenera: {str(e)}")
+
+
+@app.post("/challenge/{challenge_id}/stop-docker")
+def stop_docker_challenge(
+    challenge_id: int,
+    logged_in_user: str = Cookie(None)
+):
+    if not logged_in_user:
+        raise HTTPException(status_code=401, detail="Musisz być zalogowany!")
+    
+    container_key = f"{logged_in_user}_{challenge_id}"
+    if container_key in running_containers:
+        try:
+            container_data = running_containers[container_key]
+            container_data['container'].remove(force=True)
+            del running_containers[container_key]
+            return {"status": "stopped", "message": "Kontener zatrzymany i usunięty"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Błąd zatrzymywania: {str(e)}")
+    
+    raise HTTPException(status_code=404, detail="Nie znaleziono uruchomionego kontenera dla tego zadania")
+
+
+def cleanup_old_containers():
+    while True:
+        time.sleep(60)
+        to_remove = []
+        
+        for key, data in list(running_containers.items()):
+            try:
+                container = data['container']
+                container.reload()
+                created_at = container.attrs['Created']
+                from datetime import datetime
+                created_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                age_seconds = (datetime.now(created_dt.tzinfo) - created_dt).total_seconds()
+                
+                if age_seconds > 1800:
+                    to_remove.append(key)
+            except:
+                to_remove.append(key)
+        
+        for key in to_remove:
+            try:
+                data = running_containers[key]
+                data['container'].remove(force=True)
+                del running_containers[key]
+                print(f"Usunięto kontener: {key}")
+            except:
+                pass
+
+cleanup_thread = threading.Thread(target=cleanup_old_containers, daemon=True)
+cleanup_thread.start()

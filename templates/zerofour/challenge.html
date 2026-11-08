@@ -28,7 +28,13 @@
     </div>
 
     <div style="text-align: center; margin: 2em 0;">
-        {% if challenge.external_url %}
+        {% if challenge.docker_image %}
+            <!-- ZADANIE DOCKEROWE -->
+            <button onclick="startDocker({{ challenge.id }})" class="button large icon solid fa-play">
+                Uruchom środowisko Docker
+            </button>
+            <div id="docker-status" style="margin-top: 1em; color: #aaa;"></div>
+        {% elif challenge.external_url %}
             <a href="{{ challenge.external_url }}" target="_blank" class="button large icon solid fa-external-link-alt">
                 Otwórz stronę
             </a>
@@ -81,6 +87,46 @@
             return false;
         }
         return true;
+    }
+
+    async function startDocker(challengeId) {
+        const statusDiv = document.getElementById('docker-status');
+        statusDiv.innerHTML = '<span style="color: #ffaa00;">Uruchamianie kontenera... (może potrwać kilka sekund)</span>';
+        
+        try {
+            const response = await fetch(`/challenge/${challengeId}/start-docker`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                statusDiv.innerHTML = `
+                    <span style="color: #00ff88;">Kontener uruchomiony!</span><br>
+                    <a href="${data.url}" target="_blank" class="button" style="margin-top: 10px;">
+                        Otwórz: ${data.url}
+                    </a>
+                    <br>
+                    <button onclick="stopDocker(${challengeId})" class="button alt" style="margin-top: 10px; font-size: 0.8em;">
+                        Zatrzymaj kontener
+                    </button>
+                `;
+            } else {
+                statusDiv.innerHTML = `<span style="color: #ff4444;">Błąd: ${data.detail}</span>`;
+            }
+        } catch (error) {
+            statusDiv.innerHTML = `<span style="color: #ff4444;">Błąd połączenia: ${error.message}</span>`;
+        }
+    }
+    
+    async function stopDocker(challengeId) {
+        try {
+            await fetch(`/challenge/${challengeId}/stop-docker`, {method: 'POST'});
+            document.getElementById('docker-status').innerHTML = '<span style="color: #aaa;">Kontener zatrzymany.</span>';
+        } catch (error) {
+            alert('Błąd zatrzymywania kontenera');
+        }
     }
 </script>
 {% endblock %}

@@ -42,16 +42,22 @@
                     <option value="none">Brak pliku/linku</option>
                     <option value="file">Plik do pobrania</option>
                     <option value="url">Link do zewnętrznej strony</option>
+                    <option value="docker">Kontener Docker</option>
                 </select>
             </div>
             
             <div class="col-12" id="url_field_add" style="display: none;">
-                <input type="text" name="external_url" placeholder="Link (np. http://127.0.0.1:5000)" />
+                <input type="text" name="external_url" placeholder="Link (np. http://127.0.0.1:7000)" />
             </div>
             
             <div class="col-12" id="file_field_add" style="display: none;">
                 <input type="text" name="file_name" placeholder="Nazwa pliku (np. tajemniczy_plik.txt)" />
                 <p style="color: #666; font-size: 0.8em; margin-top: 5px;">Plik musi być w folderze challenges_files/</p>
+            </div>
+            
+            <div class="col-12" id="docker_field_add" style="display: none;">
+                <input type="text" name="docker_image" placeholder="Nazwa obrazu Docker (np. web-sqli-challenge)" />
+                <p style="color: #666; font-size: 0.8em; margin-top: 5px;">Obraz musi być zbudowany lokalnie (docker build -t nazwa .)</p>
             </div>
             
             <div class="col-6 col-12-small">
@@ -97,6 +103,9 @@
                     {% if challenge.file_name %}
                         <span style="color: #88ddff; font-size: 0.8em;">Plik: {{ challenge.file_name }}</span><br>
                     {% endif %}
+                    {% if challenge.docker_image %}
+                        <span style="color: #88ddff; font-size: 0.8em;">Docker: {{ challenge.docker_image }}</span><br>
+                    {% endif %}
                     <span style="color: #555; font-size: 0.75em;">ID: {{ challenge.id }}</span>
                 </div>
                 <div style="display: flex; gap: 10px;">
@@ -108,6 +117,7 @@
                         data-hint="{{ challenge.hint or '' }}"
                         data-external_url="{{ challenge.external_url or '' }}"
                         data-file_name="{{ challenge.file_name or '' }}"
+                        data-docker_image="{{ challenge.docker_image or '' }}"
                         data-category="{{ challenge.category }}"
                         data-points="{{ challenge.points }}"
                         data-flag="{{ challenge.flag }}"
@@ -130,12 +140,15 @@
         const val = document.getElementById('resource_type_' + type).value;
         const urlField = document.getElementById('url_field_' + type);
         const fileField = document.getElementById('file_field_' + type);
+        const dockerField = document.getElementById('docker_field_' + type);
         
         urlField.style.display = 'none';
         fileField.style.display = 'none';
+        if (dockerField) dockerField.style.display = 'none';
         
         if (val === 'url') urlField.style.display = 'block';
         if (val === 'file') fileField.style.display = 'block';
+        if (val === 'docker' && dockerField) dockerField.style.display = 'block';
     }
 
     function openEditModal(btn) {
@@ -146,39 +159,41 @@
         document.getElementById('edit_hint').value = btn.dataset.hint || '';
         document.getElementById('edit_external_url').value = btn.dataset.external_url || '';
         document.getElementById('edit_file_name').value = btn.dataset.file_name || '';
+        document.getElementById('edit_docker_image').value = btn.dataset.docker_image || '';
         document.getElementById('edit_category').value = btn.dataset.category;
         document.getElementById('edit_points').value = btn.dataset.points;
         document.getElementById('edit_flag').value = btn.dataset.flag;
         
         const select = document.getElementById('resource_type_edit');
-        if (btn.dataset.external_url) {
+        if (btn.dataset.docker_image) {
+            select.value = 'docker';
+            document.getElementById('docker_field_edit').style.display = 'block';
+            document.getElementById('url_field_edit').style.display = 'none';
+            document.getElementById('file_field_edit').style.display = 'none';
+        } else if (btn.dataset.external_url) {
             select.value = 'url';
             document.getElementById('url_field_edit').style.display = 'block';
             document.getElementById('file_field_edit').style.display = 'none';
+            document.getElementById('docker_field_edit').style.display = 'none';
         } else if (btn.dataset.file_name) {
             select.value = 'file';
             document.getElementById('file_field_edit').style.display = 'block';
             document.getElementById('url_field_edit').style.display = 'none';
+            document.getElementById('docker_field_edit').style.display = 'none';
         } else {
             select.value = 'none';
             document.getElementById('url_field_edit').style.display = 'none';
             document.getElementById('file_field_edit').style.display = 'none';
+            document.getElementById('docker_field_edit').style.display = 'none';
         }
         
-        // Zablokuj scroll strony
         document.body.style.overflow = 'hidden';
-        document.documentElement.style.overflow = 'hidden';
-        
-        // Pokaż modal
         document.getElementById('editModal').style.display = 'flex';
     }
     
     function closeEditModal() {
         document.getElementById('editModal').style.display = 'none';
-        
-        // Przywróć scroll
         document.body.style.overflow = '';
-        document.documentElement.style.overflow = '';
     }
 
     document.querySelectorAll('.edit-btn').forEach(btn => {
@@ -187,4 +202,68 @@
         });
     });
 </script>
+
+<div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 2147483647; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 40px 20px;">
+    <div style="background: #fff; max-width: 600px; width: 90%; padding: 30px; border-radius: 15px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); margin: auto;">
+        <h2 style="text-align: center; margin-bottom: 20px; color: #404248; font-size: 1.6em; text-transform: uppercase; font-weight: 800;">Edytuj zadanie</h2>
+        <form method="POST" action="/admin/edit-challenge" id="editForm">
+            <input type="hidden" name="challenge_id" id="edit_id">
+            <div class="row gtr-50">
+                <div class="col-12">
+                    <input type="text" name="title" id="edit_title" placeholder="Tytuł" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                </div>
+                <div class="col-12">
+                    <textarea name="description" id="edit_description" placeholder="Krótki opis" rows="2" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;"></textarea>
+                </div>
+                <div class="col-12">
+                    <textarea name="long_description" id="edit_long_description" placeholder="Długi opis" rows="4" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;"></textarea>
+                </div>
+                <div class="col-12">
+                    <input type="text" name="hint" id="edit_hint" placeholder="Wskazówka" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                </div>
+                
+                <div class="col-12">
+                    <select name="resource_type" id="resource_type_edit" onchange="toggleResourceFields('edit')" style="width:100%; padding:10px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                        <option value="none">Brak pliku/linku</option>
+                        <option value="file">Plik do pobrania</option>
+                        <option value="url">Link do zewnętrznej strony</option>
+                        <option value="docker">Kontener Docker</option>
+                    </select>
+                </div>
+                
+                <div class="col-12" id="url_field_edit" style="display: none;">
+                    <input type="text" name="external_url" id="edit_external_url" placeholder="Link" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                </div>
+                
+                <div class="col-12" id="file_field_edit" style="display: none;">
+                    <input type="text" name="file_name" id="edit_file_name" placeholder="Nazwa pliku" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                </div>
+                
+                <div class="col-12" id="docker_field_edit" style="display: none;">
+                    <input type="text" name="docker_image" id="edit_docker_image" placeholder="Nazwa obrazu Docker" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                </div>
+                
+                <div class="col-6 col-12-small">
+                    <select name="category" id="edit_category" style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                        <option value="Web Exploitation">Web Exploitation</option>
+                        <option value="Cryptography">Cryptography</option>
+                        <option value="Forensics">Forensics</option>
+                    </select>
+                </div>
+                <div class="col-6 col-12-small">
+                    <input type="number" name="points" id="edit_points" placeholder="Punkty" required style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                </div>
+                <div class="col-12">
+                    <input type="text" name="flag" id="edit_flag" placeholder="Flaga" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
+                </div>
+                <div class="col-12" style="text-align: center;">
+                    <ul class="actions" style="display: inline-flex; justify-content: center; gap: 1em; margin: 0;">
+                        <li><button type="submit" class="button" style="background:#4091bf; color:#fff; border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer;">Zapisz</button></li>
+                        <li><button type="button" class="button alt" onclick="closeEditModal()" style="background:#464a52; color:#fff; border:none; padding:12px 30px; border-radius:8px; cursor:pointer;">Anuluj</button></li>
+                    </ul>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
