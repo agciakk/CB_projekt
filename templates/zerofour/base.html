@@ -134,6 +134,114 @@
         </div>
     </div>
 
+    <!-- MODAL EDYCJI ZADANIA - POZA WSZYSTKIMI WRAPPERAMI -->
+    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 2147483647; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 40px 20px;">
+        <div style="background: #fff; max-width: 600px; width: 90%; padding: 30px; border-radius: 15px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); margin: auto;">
+            <h2 style="text-align: center; margin-bottom: 20px; color: #404248; font-size: 1.6em; text-transform: uppercase; font-weight: 800;">Edytuj zadanie</h2>
+            <form method="POST" action="/admin/edit-challenge" id="editForm">
+                <input type="hidden" name="challenge_id" id="edit_id">
+                <div class="row gtr-50">
+                    <div class="col-12">
+                        <input type="text" name="title" id="edit_title" placeholder="Tytuł zadania" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                    </div>
+                    <div class="col-12">
+                        <textarea name="description" id="edit_description" placeholder="Opis zadania" rows="4" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;"></textarea>
+                    </div>
+                    <div class="col-12" style="margin-top:.5em;">
+                        <h3 style="margin:0 0 .4em 0; color:#404248;">Podpowiedzi (maksymalnie 3 poziomy)</h3>
+                    </div>
+                    <div class="col-8 col-12-small">
+                        <label for="edit_hint_1" style="color:#444;">Poziom 1</label>
+                        <textarea name="hint_1" id="edit_hint_1" rows="2" style="width:100%; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px;"></textarea>
+                    </div>
+                    <div class="col-4 col-12-small">
+                        <label for="edit_hint_1_penalty" style="color:#444;">Koszt (pkt)</label>
+                        <input type="number" name="hint_1_penalty" id="edit_hint_1_penalty" min="0" value="0" style="width:100%; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px;">
+                    </div>
+                    <div class="col-8 col-12-small">
+                        <label for="edit_hint_2" style="color:#444;">Poziom 2</label>
+                        <textarea name="hint_2" id="edit_hint_2" rows="2" style="width:100%; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px;"></textarea>
+                    </div>
+                    <div class="col-4 col-12-small">
+                        <label for="edit_hint_2_penalty" style="color:#444;">Koszt (pkt)</label>
+                        <input type="number" name="hint_2_penalty" id="edit_hint_2_penalty" min="0" value="10" style="width:100%; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px;">
+                    </div>
+                    <div class="col-8 col-12-small">
+                        <label for="edit_hint_3" style="color:#444;">Poziom 3</label>
+                        <textarea name="hint_3" id="edit_hint_3" rows="2" style="width:100%; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px;"></textarea>
+                    </div>
+                    <div class="col-4 col-12-small">
+                        <label for="edit_hint_3_penalty" style="color:#444;">Koszt (pkt)</label>
+                        <input type="number" name="hint_3_penalty" id="edit_hint_3_penalty" min="0" value="20" style="width:100%; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px;">
+                    </div>
+                    <div class="col-12">
+                        <input type="text" name="external_url" id="edit_external_url" placeholder="Link do zewnętrznej aplikacji (opcjonalnie)" style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                    </div>
+                    <div class="col-12">
+                        <label for="edit_docker_template" style="display:block; margin-bottom:6px; color:#444;">Środowisko Docker</label>
+                        <select name="docker_template" id="edit_docker_template" style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                            <option value="">Brak środowiska Docker</option>
+                            <option value="web_sqli">CyberShop – SQL Injection</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-12-small">
+                        <select name="category" id="edit_category" style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                            <option value="Web Exploitation">Web Exploitation</option>
+                            <option value="Cryptography">Cryptography</option>
+                            <option value="Forensics">Forensics</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-12-small">
+                        <input type="number" name="points" id="edit_points" placeholder="Liczba punktów" required style="width:100%; height:45px; padding:0 12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; box-sizing:border-box;">
+                    </div>
+                    <div class="col-12">
+                        <input type="text" name="flag" id="edit_flag" placeholder="Flaga" required style="width:100%; padding:12px; background:#fff; color:#333; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
+                    </div>
+                    <div class="col-12" style="text-align: center;">
+                        <ul class="actions" style="display: inline-flex; justify-content: center; gap: 1em; margin: 0;">
+                            <li><button type="submit" class="button" style="background:#4091bf; color:#fff; border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer;">Zapisz zmiany</button></li>
+                            <li><button type="button" class="button alt" onclick="closeEditModal()" style="background:#464a52; color:#fff; border:none; padding:12px 30px; border-radius:8px; cursor:pointer;">Anuluj</button></li>
+                        </ul>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Obsługa przycisków edycji (przeniesiona tutaj, żeby działała globalnie)
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.getElementById('edit_id').value = this.dataset.id;
+                document.getElementById('edit_title').value = this.dataset.title;
+                document.getElementById('edit_description').value = this.dataset.description;
+                document.getElementById('edit_hint_1').value = this.dataset.hint1 || '';
+                document.getElementById('edit_hint_1_penalty').value = this.dataset.hint1Penalty || '0';
+                document.getElementById('edit_hint_2').value = this.dataset.hint2 || '';
+                document.getElementById('edit_hint_2_penalty').value = this.dataset.hint2Penalty || '10';
+                document.getElementById('edit_hint_3').value = this.dataset.hint3 || '';
+                document.getElementById('edit_hint_3_penalty').value = this.dataset.hint3Penalty || '20';
+                document.getElementById('edit_category').value = this.dataset.category;
+                document.getElementById('edit_points').value = this.dataset.points;
+                document.getElementById('edit_flag').value = this.dataset.flag;
+                document.getElementById('edit_external_url').value = this.dataset.externalUrl || '';
+                document.getElementById('edit_docker_template').value = this.dataset.dockerTemplate || '';
+                
+                // Zablokuj przewijanie tła
+                document.body.style.overflow = 'hidden';
+                
+                // Pokaż modal
+                document.getElementById('editModal').style.display = 'flex';
+            });
+        });
+        
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            // Przywróć przewijanie tła
+            document.body.style.overflow = '';
+        }
+    </script>
+
     <script src="/assets/js/jquery.min.js"></script>
     <script src="/assets/js/jquery.dropotron.min.js"></script>
     <script src="/assets/js/browser.min.js"></script>
