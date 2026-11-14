@@ -3,7 +3,7 @@
 {% block banner %}
 <div id="banner" style="text-align:center;">
     <h2>Centrum powiadomień</h2>
-    <p>Ważne informacje o drużynach, turniejach, osiągnięciach i komunikatach CyberSim.</p>
+    <p style="text-align:center !important; width:100%;">Ważne informacje o drużynach, turniejach, osiągnięciach i komunikatach CyberSim.</p>
 </div>
 {% endblock %}
 
@@ -42,13 +42,13 @@
                         {% else %}Komunikaty{% endif %}
                     </small>
                 </div>
-                <div style="display:flex; gap:.5em; flex-wrap:wrap;">
+                <div style="display:flex; gap:.5em; flex-wrap:wrap; align-items:center;">
                     {% if item.target_url %}
-                    <a class="button alt" href="{{ item.target_url }}">Otwórz</a>
+                    <a class="button alt" href="{{ item.target_url }}" style="height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0 1.5em; box-sizing: border-box; margin: 0;">Otwórz</a>
                     {% endif %}
                     {% if not item.is_read %}
-                    <form method="post" action="/notifications/{{ item.id }}/read">
-                        <button type="submit" class="button">Oznacz jako przeczytane</button>
+                    <form method="post" action="/notifications/{{ item.id }}/read" style="margin: 0; display: inline-flex;">
+                        <button type="submit" class="button" style="height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0 1.5em; box-sizing: border-box; margin: 0;">Oznacz jako przeczytane</button>
                     </form>
                     {% endif %}
                 </div>

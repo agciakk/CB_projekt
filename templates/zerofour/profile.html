@@ -3,7 +3,7 @@
 {% block banner %}
 <div id="banner" style="text-align:center !important;">
     <h2>Profil użytkownika: {{ username }}</h2>
-    <p style="text-align:center !important;">Twoje postępy, skuteczność i historia rozwiązywania zadań CTF.</p>
+    <p style="text-align:center !important; width:100%;">Twoje postępy, skuteczność i historia rozwiązywania zadań CTF.</p>
 </div>
 {% endblock %}
 
@@ -40,9 +40,9 @@
     </div>
 
     <div class="row gtr-50" style="margin:0 0 2em 0;">
-        <div class="col-6 col-12-small">
-            <div style="padding:1.25em; border:1px solid #444; border-radius:10px;">
-                <div style="display:flex; justify-content:space-between; gap:1em; flex-wrap:wrap;">
+            <div class="col-6 col-12-small" style="padding-left: 0 !important;">
+                <div style="padding:1.25em; border:1px solid #444; border-radius:10px; height:100%;">
+                    <div style="display:flex; justify-content:space-between; gap:1em; flex-wrap:wrap;">
                     <div>
                         <div style="color:#aaa;">Poziom doświadczenia</div>
                         <strong style="font-size:2em;">Poziom {{ level_info.level }}</strong>

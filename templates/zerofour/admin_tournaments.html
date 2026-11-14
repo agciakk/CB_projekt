@@ -3,7 +3,7 @@
 {% block banner %}
 <div id="banner" style="text-align:center;">
     <h2>Zarządzanie turniejami</h2>
-    <p>Twórz zawody, wybieraj zadania, ustawiaj terminy i kontroluj zapisy.</p>
+    <p style="text-align:center !important; width:100%;">Twórz zawody, wybieraj zadania, ustawiaj terminy i kontroluj zapisy.</p>
 </div>
 {% endblock %}
 
@@ -16,7 +16,7 @@
         <h2>Utwórz turniej</h2>
         <p>Daty są interpretowane jako UTC. Zapisy otwiera administrator po zapisaniu turnieju.</p>
     </header>
-    <form method="post" action="/admin/tournaments/create">
+    <form method="post" action="/admin/tournaments/create" class="admin-form">
         <div class="row gtr-50">
             <div class="col-12"><label for="tournament-title">Nazwa turnieju</label><input id="tournament-title" name="title" type="text" maxlength="120" required placeholder="Np. CyberSim Winter Cup"></div>
             <div class="col-12"><label for="tournament-description">Opis i zasady</label><textarea id="tournament-description" name="description" rows="3" placeholder="Opis, zasady punktacji i warunki udziału"></textarea></div>
@@ -28,8 +28,14 @@
                 <label for="max-participants">Limit uczestników / drużyn (opcjonalnie)</label>
                 <input id="max-participants" name="max_participants_text" type="number" min="1" placeholder="Bez limitu">
             </div>
-            <div class="col-6 col-12-small"><label for="starts-at">Start (UTC)</label><input id="starts-at" name="starts_at" type="datetime-local" required></div>
-            <div class="col-6 col-12-small"><label for="ends-at">Koniec (UTC)</label><input id="ends-at" name="ends_at" type="datetime-local" required></div>
+            <div class="col-6 col-12-small" style="flex:1; min-width:200px; display:flex; flex-direction:column;">
+                <label for="starts-at" style="color:#aaa; font-size:0.85em; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em;">Start (UTC)</label>
+                <input id="starts-at" name="starts_at" type="datetime-local" required style="width:100%; height:45px; padding:0 12px; border:1px solid #000; border-radius:8px; box-sizing:border-box; font-family:'Open Sans', sans-serif;">
+            </div>
+            <div class="col-6 col-12-small" style="flex:1; min-width:200px; display:flex; flex-direction:column;">
+                <label for="ends-at" style="color:#aaa; font-size:0.85em; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em;">Koniec (UTC)</label>
+                <input id="ends-at" name="ends_at" type="datetime-local" required style="width:100%; height:45px; padding:0 12px; border:1px solid #000; border-radius:8px; box-sizing:border-box; font-family:'Open Sans', sans-serif;">
+            </div>
         </div>
         <h3 style="margin-top:1.5em;">Zadania w turnieju</h3>
         {% if challenges %}
@@ -52,24 +58,54 @@
 
 <section class="container box" style="max-width:1000px; margin:0 auto; padding:2em;">
     <header class="major"><h2>Utworzone turnieje</h2></header>
+    
     {% for row in tournament_rows %}
-    <article style="padding:1.1em; border:1px solid #444; border-radius:10px; margin-bottom:1em;">
-        <div style="display:flex; justify-content:space-between; gap:1em; flex-wrap:wrap;">
-            <div>
-                <h3 style="margin:0 0 .4em;">{{ row.tournament.title }}</h3>
-                <p style="color:#aaa; margin:0;">{% if row.tournament.competition_type == "team" %}Drużynowy{% else %}Indywidualny{% endif %} · {{ row.challenge_count }} zadań · {{ row.participant_count }} uczestników</p>
-                <small style="color:#888;">{{ row.tournament.starts_at.strftime("%Y-%m-%d %H:%M") }} – {{ row.tournament.ends_at.strftime("%Y-%m-%d %H:%M") }} UTC</small>
+    <article style="padding:1.5em; border:1px solid #444; border-radius:10px; margin-bottom:1.5em; background: rgba(255,255,255,0.02);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1.5em; flex-wrap:wrap;">
+            
+            <!-- LEWA STRONA: Informacje o turnieju -->
+            <div style="flex: 1; min-width: 250px;">
+                <h3 style="margin:0 0 .5em; font-size: 1.4em;">{{ row.tournament.title }}</h3>
+                <p style="color:#aaa; margin:0 0 .5em; font-size: 0.95em;">
+                    {% if row.tournament.competition_type == "team" %}Drużynowy{% else %}Indywidualny{% endif %} · 
+                    {{ row.challenge_count }} zadań · 
+                    {{ row.participant_count }} uczestników
+                </p>
+                <small style="color:#888; display: block; margin-bottom: 1em;">
+                    {{ row.tournament.starts_at.strftime("%Y-%m-%d %H:%M") }} – {{ row.tournament.ends_at.strftime("%Y-%m-%d %H:%M") }} UTC
+                </small>
+                
+                <!-- Status jako kolorowa plakietka -->
+                <div>
+                    <span style="display: inline-block; padding: 0.3em 0.8em; border-radius: 6px; font-size: 0.85em; font-weight: bold; text-transform: uppercase;
+                        {% if row.tournament.status == 'open' %} background: rgba(54, 184, 120, 0.2); color: #36b878; border: 1px solid #36b878;
+                        {% elif row.tournament.status == 'finished' %} background: rgba(224, 107, 107, 0.2); color: #e06b6b; border: 1px solid #e06b6b;
+                        {% else %} background: rgba(255, 255, 255, 0.1); color: #aaa; border: 1px solid #777; {% endif %}">
+                        {% if row.tournament.status == 'open' %}Otwarty
+                        {% elif row.tournament.status == 'finished' %}Zakończony
+                        {% else %}Szkic{% endif %}
+                    </span>
+                </div>
             </div>
-            <div>
-                <strong>{{ row.tournament.status }}</strong>
-                <a href="/admin/tournaments/{{ row.tournament.id }}" class="button alt" style="margin-left:.5em;">Uczestnicy i wyniki</a>
-                <form method="post" action="/admin/tournaments/{{ row.tournament.id }}/status" style="display:flex; gap:.5em; flex-wrap:wrap; margin-top:.75em;">
-                    <select name="status" aria-label="Status turnieju">
+
+            <!-- PRAWA STRONA: Akcje i formularz statusu -->
+            <div style="display: flex; flex-direction: column; gap: 1em; min-width: 250px; max-width: 300px; width: 100%;">
+                
+                <!-- Przycisk do uczestników -->
+                <a href="/admin/tournaments/{{ row.tournament.id }}" class="button alt" style="width: 100%; text-align: center; display: inline-block; box-sizing: border-box;">
+                    Uczestnicy i wyniki
+                </a>
+
+                <!-- Formularz zmiany statusu -->
+                <form method="post" action="/admin/tournaments/{{ row.tournament.id }}/status" style="display: flex; flex-direction: column; gap: 0.5em; margin: 0;">
+                    <select name="status" aria-label="Status turnieju" class="admin-form" style="width: 100%; margin: 0; height: 42px; border: 1px solid #000; border-radius: 8px; padding: 0 12px;">
                         <option value="draft" {% if row.tournament.status == "draft" %}selected{% endif %}>Szkic</option>
                         <option value="open" {% if row.tournament.status == "open" %}selected{% endif %}>Otwórz zapisy</option>
                         <option value="finished" {% if row.tournament.status == "finished" %}selected{% endif %}>Zakończ</option>
                     </select>
-                    <button type="submit" class="button">Zapisz status</button>
+                    <button type="submit" class="button" style="width: 100%; margin: 0; height: 42px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;">
+                        Zapisz status
+                    </button>
                 </form>
             </div>
         </div>
@@ -77,6 +113,9 @@
     {% else %}
     <p style="color:#aaa;">Nie utworzono jeszcze turniejów.</p>
     {% endfor %}
-    <div style="text-align:center; margin-top:1.5em;"><a href="/tournaments" class="button alt">Zobacz stronę turniejów</a></div>
+    
+    <div style="text-align:center; margin-top:2em;">
+        <a href="/tournaments" class="button alt large">Zobacz stronę turniejów</a>
+    </div>
 </section>
 {% endblock %}
