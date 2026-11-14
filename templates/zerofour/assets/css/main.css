@@ -2475,8 +2475,3 @@ input, select, textarea {
 		outline: none !important;
 		box-shadow: 0 0 5px #3081af !important;
 	}
-
-	#editModal {
-    z-index: 999999 !important;
-    position: fixed !important;
-}

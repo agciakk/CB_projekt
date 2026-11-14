@@ -1,19 +1,41 @@
 # -*- coding: utf-8 -*-
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Cookie
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, status
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 import os
+import asyncio
+import logging
 
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db, SessionLocal
+from migrate_roles import migrate as migrate_roles
 import models
-import docker
-import random
-import threading
-import time
 
 from passlib.context import CryptContext
+from security import get_current_user, require_admin, set_session_cookie, clear_session_cookie
+from docker_manager import (
+    CLEANUP_INTERVAL_SECONDS,
+    cleanup_expired_instances,
+    get_active_instance,
+    instance_url,
+    is_supported_template,
+    stop_instance,
+)
+from instance_routes import router as instance_router
+from infrastructure_routes import router as infrastructure_router
+from migrate_docker import migrate as migrate_docker
+from migrate_activity import migrate as migrate_activity
+from migrate_hints import migrate as migrate_hints
+from migrate_achievements import migrate as migrate_achievements
+from hint_routes import router as hint_router
+from hint_service import HintError, get_hint_view, save_challenge_hints
+from activity_routes import router as activity_router
+from activity_service import (
+    MAX_FLAG_ATTEMPTS_PER_MINUTE,
+    SubmissionRateLimitError,
+    record_flag_submission,
+)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -23,14 +45,12 @@ def get_password_hash(password):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-if not os.path.exists("ctf_platform.db"):
-    Base.metadata.create_all(bind=engine)
-    print("Utworzono nowa baze danych")
-else:
-    print("Baza danych juz istnieje")
-    Base.metadata.create_all(bind=engine)
-
 app = FastAPI()
+app.include_router(instance_router)
+app.include_router(infrastructure_router)
+app.include_router(activity_router)
+app.include_router(hint_router)
+logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -40,25 +60,12 @@ app.mount("/assets", StaticFiles(directory=os.path.join(ZEROFOUR_DIR, "assets"))
 app.mount("/images", StaticFiles(directory=os.path.join(ZEROFOUR_DIR, "images")), name="images")
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+app.state.templates = templates
 
 
 def init_database():
-    # Sprawdź czy baza była już zainicjalizowana
-    if os.path.exists(".db_initialized"):
-        print("Baza już zainicjalizowana - pomijam init_database().")
-        return
-    
     db = SessionLocal()
     try:
-        admin = db.query(models.User).filter(models.User.username == "admin").first()
-        if not admin:
-            admin_user = models.User(username="admin", password_hash=get_password_hash("admin"))
-            db.add(admin_user)
-            db.commit()
-            print("Utworzono konto admina (login: admin, haslo: admin)")
-        else:
-            print("Konto admina juz istnieje - pomijam.")
-        
         if db.query(models.Challenge).count() == 0:
             zadania = [
                 models.Challenge(
@@ -69,9 +76,7 @@ def init_database():
                     category="Forensics",
                     points=50,
                     flag="CTF{flaga_pliku_flag.txt}",
-                    external_url=None,
-                    file_name="tajemniczy_plik.txt",
-                    docker_image=None
+                    external_url=None
                 ),
                 models.Challenge(
                     title="Szyfr Cezara",
@@ -81,9 +86,7 @@ def init_database():
                     category="Cryptography",
                     points=100,
                     flag="CTF{cezar_to_geniusz}",
-                    external_url=None,
-                    file_name="cezar.txt",
-                    docker_image=None
+                    external_url=None
                 ),
                 models.Challenge(
                     title="Podatna wyszukiwarka",
@@ -94,8 +97,7 @@ def init_database():
                     points=150,
                     flag="CTF{sql_injection_master}",
                     external_url=None,
-                    file_name=None,
-                    docker_image="web-sqli-challenge"
+                    docker_template="web_sqli"
                 )
             ]
             db.add_all(zadania)
@@ -107,36 +109,61 @@ def init_database():
         user_count = db.query(models.User).count()
         print(f"Liczba uzytkownikow w bazie: {user_count}")
         
-        # Utwórz plik flagi - init_database() nie będzie już nigdy uruchamiane
-        with open(".db_initialized", "w") as f:
-            f.write("initialized")
-        print("Baza zainicjalizowana - utworzono .db_initialized")
-        
     except Exception as e:
         print(f"Blad inicjalizacji: {e}")
     finally:
         db.close()
 
+migrate_roles()
+migrate_docker()
+migrate_activity()
 init_database()
+migrate_hints()
+migrate_achievements()
 
 
-def get_user_points(db: Session, username: str):
-    if username:
-        user = db.query(models.User).filter(models.User.username == username).first()
-        if user:
-            return user.score
-    return 0
+async def _instance_cleanup_worker():
+    while True:
+        try:
+            await asyncio.to_thread(cleanup_expired_instances)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Błąd okresowego sprzątania instancji Docker")
+        await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def start_instance_cleanup_worker():
+    app.state.instance_cleanup_task = asyncio.create_task(_instance_cleanup_worker())
+
+
+@app.on_event("shutdown")
+async def stop_instance_cleanup_worker():
+    task = getattr(app.state, "instance_cleanup_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+def get_user_points(db: Session, user):
+    return user.score if user is not None else 0
 
 
 @app.get("/")
 def home(
     request: Request, 
-    logged_in_user: str = Cookie(None), 
+    current_user: models.User = Depends(get_current_user), 
     category: str = None,
     db: Session = Depends(get_db)
 ):
-    user_points = get_user_points(db, logged_in_user)
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     
+    # Filtruj zadania jeśli wybrano kategorię
     query = db.query(models.Challenge)
     if category:
         query = query.filter(models.Challenge.category == category)
@@ -148,6 +175,7 @@ def home(
         {
             "request": request, 
             "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
             "challenges": all_challenges,
             "user_points": user_points,
             "active_page": "home",
@@ -156,8 +184,9 @@ def home(
     )
 
 @app.get("/register")
-def show_register_form(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    user_points = get_user_points(db, logged_in_user)
+def show_register_form(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     error = request.query_params.get("error")
     success = request.query_params.get("success")
     return templates.TemplateResponse(
@@ -165,7 +194,8 @@ def show_register_form(request: Request, logged_in_user: str = Cookie(None), db:
         "zerofour/register.html", 
         {
             "request": request, 
-            "username": logged_in_user, 
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"), 
             "user_points": user_points, 
             "error": error, 
             "success": success,
@@ -186,22 +216,24 @@ def register_user(
     if existing_user:
         return RedirectResponse(url="/register?error=Nazwa użytkownika jest już zajęta!", status_code=status.HTTP_302_FOUND)
     
-    new_user = models.User(username=username, password_hash=get_password_hash(password))
+    new_user = models.User(username=username, password_hash=get_password_hash(password), role="user")
     db.add(new_user)
     db.commit()
     
     return RedirectResponse(url="/login?success=Konto utworzone! Możesz się zalogować.", status_code=status.HTTP_302_FOUND)
 
 @app.get("/login")
-def show_login_form(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    user_points = get_user_points(db, logged_in_user)
+def show_login_form(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     error = request.query_params.get("error")
     return templates.TemplateResponse(
         request, 
         "zerofour/login.html", 
         {
             "request": request, 
-            "username": logged_in_user, 
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"), 
             "user_points": user_points, 
             "error": error,
             "active_page": "login"
@@ -219,29 +251,29 @@ def login_user(
         return RedirectResponse(url="/login?error=Nieprawidłowy login lub hasło!", status_code=status.HTTP_302_FOUND)
     
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-    response.set_cookie(key="logged_in_user", value=user.username)
+    set_session_cookie(response, user)
     return response
 
 @app.get("/logout")
 def logout():
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-    response.delete_cookie("logged_in_user")
+    clear_session_cookie(response)
     return response
 
 @app.get("/admin")
-def show_admin_panel(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak dostępu! Tylko dla administratora.")
-    
+def show_admin_panel(request: Request, current_admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    current_user = current_admin
     all_challenges = db.query(models.Challenge).all()
-    user_points = get_user_points(db, logged_in_user)
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     
     return templates.TemplateResponse(
         request, 
         "zerofour/admin.html", 
         {
             "request": request, 
-            "username": logged_in_user, 
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"), 
             "challenges": all_challenges, 
             "user_points": user_points,
             "active_page": "admin"
@@ -254,46 +286,70 @@ def add_challenge(
     description: str = Form(...),
     long_description: str = Form(None),
     hint: str = Form(None),
-    resource_type: str = Form(...),
-    external_url: str = Form(None),
-    file_name: str = Form(None),
-    docker_image: str = Form(None),
+    hint_1: str = Form(None),
+    hint_1_penalty: int = Form(0),
+    hint_2: str = Form(None),
+    hint_2_penalty: int = Form(0),
+    hint_3: str = Form(None),
+    hint_3_penalty: int = Form(0),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
-    logged_in_user: str = Cookie(None),
+    external_url: str = Form(None),
+    docker_template: str = Form(""),
+    current_admin: models.User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
-    
-    final_url = None
-    final_file = None
-    final_docker = None
-    
-    if resource_type == 'url' and external_url:
-        final_url = external_url
-    elif resource_type == 'file' and file_name:
-        final_file = file_name
-    elif resource_type == 'docker' and docker_image:
-        final_docker = docker_image
-    
+    docker_template = docker_template.strip() or None
+    if not is_supported_template(docker_template):
+        raise HTTPException(status_code=400, detail="Nieobsługiwany szablon Docker.")
+
+    first_hint = (hint_1 or hint or "").strip()
     new_challenge = models.Challenge(
         title=title,
         description=description,
         long_description=long_description or description,
-        hint=hint,
+        hint=first_hint or None,
         category=category,
         points=points,
         flag=flag,
-        external_url=final_url,
-        file_name=final_file,
-        docker_image=final_docker
+        external_url=None if docker_template else (external_url.strip() or None),
+        docker_template=docker_template
     )
     db.add(new_challenge)
-    db.commit()
+    try:
+        db.flush()
+        save_challenge_hints(db, new_challenge, {
+            1: (first_hint, hint_1_penalty),
+            2: (hint_2, hint_2_penalty),
+            3: (hint_3, hint_3_penalty),
+        })
+        db.commit()
+    except HintError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
+@app.post("/admin/delete-challenge")
+def delete_challenge(
+    challenge_id: int = Form(...),
+    current_admin: models.User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
+    if challenge:
+        active_instances = db.query(models.ChallengeInstance).filter(
+            models.ChallengeInstance.challenge_id == challenge_id,
+            models.ChallengeInstance.status.in_(["starting", "running", "stop_failed"]),
+        ).all()
+        for instance in active_instances:
+            stop_instance(db, instance)
+        db.delete(challenge)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 @app.post("/admin/edit-challenge")
 def edit_challenge(
@@ -302,71 +358,56 @@ def edit_challenge(
     description: str = Form(...),
     long_description: str = Form(None),
     hint: str = Form(None),
-    resource_type: str = Form(...),
-    external_url: str = Form(None),
-    file_name: str = Form(None),
-    docker_image: str = Form(None),
+    hint_1: str = Form(None),
+    hint_1_penalty: int = Form(0),
+    hint_2: str = Form(None),
+    hint_2_penalty: int = Form(0),
+    hint_3: str = Form(None),
+    hint_3_penalty: int = Form(0),
     category: str = Form(...),
     points: int = Form(...),
     flag: str = Form(...),
-    logged_in_user: str = Cookie(None),
+    external_url: str = Form(None),
+    docker_template: str = Form(""),
+    current_admin: models.User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
-    
+    docker_template = docker_template.strip() or None
+    if not is_supported_template(docker_template):
+        raise HTTPException(status_code=400, detail="Nieobsługiwany szablon Docker.")
+
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if challenge:
+        first_hint = (hint_1 or hint or "").strip()
         challenge.title = title
         challenge.description = description
         challenge.long_description = long_description or description
-        challenge.hint = hint
+        challenge.hint = first_hint or None
         challenge.category = category
         challenge.points = points
         challenge.flag = flag
-        
-        if resource_type == 'url' and external_url:
-            challenge.external_url = external_url
-            challenge.file_name = None
-            challenge.docker_image = None
-        elif resource_type == 'file' and file_name:
-            challenge.file_name = file_name
-            challenge.external_url = None
-            challenge.docker_image = None
-        elif resource_type == 'docker' and docker_image:
-            challenge.docker_image = docker_image
-            challenge.external_url = None
-            challenge.file_name = None
-        else:
-            challenge.external_url = None
-            challenge.file_name = None
-            challenge.docker_image = None
-        
-        db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
-
-@app.post("/admin/delete-challenge")
-def delete_challenge(
-    challenge_id: int = Form(...),
-    logged_in_user: str = Cookie(None),
-    db: Session = Depends(get_db)
-):
-    if not logged_in_user or logged_in_user != "admin":
-        raise HTTPException(status_code=403, detail="Brak uprawnień!")
-    
-    db.query(models.Solve).filter(models.Solve.challenge_id == challenge_id).delete()
-    
-    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
-    if challenge:
-        db.delete(challenge)
-        db.commit()
-    
+        challenge.docker_template = docker_template
+        challenge.external_url = None if docker_template else (external_url.strip() or None)
+        try:
+            save_challenge_hints(db, challenge, {
+                1: (first_hint, hint_1_penalty),
+                2: (hint_2, hint_2_penalty),
+                3: (hint_3, hint_3_penalty),
+            })
+            db.commit()
+        except HintError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception:
+            db.rollback()
+            raise
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 @app.get("/scoreboard")
-def show_scoreboard(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+def show_scoreboard(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     users = db.query(models.User).order_by(models.User.score.desc()).all()
-    user_points = get_user_points(db, logged_in_user)
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     
     return templates.TemplateResponse(
         request,
@@ -374,6 +415,7 @@ def show_scoreboard(request: Request, logged_in_user: str = Cookie(None), db: Se
         {
             "request": request,
             "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
             "users": users,
             "user_points": user_points,
             "active_page": "scoreboard"
@@ -381,271 +423,198 @@ def show_scoreboard(request: Request, logged_in_user: str = Cookie(None), db: Se
     )
 
 @app.get("/rules")
-def show_rules(request: Request, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
-    user_points = get_user_points(db, logged_in_user)
+def show_rules(request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
     return templates.TemplateResponse(
         request, 
         "zerofour/rules.html", 
         {
             "request": request, 
-            "username": logged_in_user, 
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"), 
             "user_points": user_points,
             "active_page": "rules"
         }
     )
 
 @app.get("/challenge/{challenge_id}")
-def show_challenge(request: Request, challenge_id: int, logged_in_user: str = Cookie(None), db: Session = Depends(get_db)):
+def show_challenge(request: Request, challenge_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
     if not challenge:
         raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
     
-    user_points = get_user_points(db, logged_in_user)
-    
+    logged_in_user = current_user.username if current_user else None
+    user_points = get_user_points(db, current_user)
+    active_instance = get_active_instance(db, current_user.id, challenge.id) if current_user else None
+    current_instance_url = instance_url(active_instance) if active_instance else None
+    instance_error = request.query_params.get("instance_error")
+    instance_notice = request.query_params.get("instance_started") or request.query_params.get("instance_stopped")
+    hint_message = request.query_params.get("hint_notice")
+    hint_error = request.query_params.get("hint_error")
+    hints = get_hint_view(db, challenge, current_user)
+    challenge_attempts = 0
+    if current_user:
+        challenge_attempts = (
+            db.query(models.Submission)
+            .filter(
+                models.Submission.user_id == current_user.id,
+                models.Submission.challenge_id == challenge.id,
+            )
+            .count()
+        )
+
     return templates.TemplateResponse(
         request,
         "zerofour/challenge.html",
         {
             "request": request,
             "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
             "challenge": challenge,
             "user_points": user_points,
+            "current_instance": active_instance,
+            "current_instance_url": current_instance_url,
+            "instance_error": instance_error,
+            "instance_notice": instance_notice,
+            "challenge_attempts": challenge_attempts,
+            "max_flag_attempts": MAX_FLAG_ATTEMPTS_PER_MINUTE,
+            "hints": hints,
+            "hint_message": hint_message,
+            "hint_error": hint_error,
             "active_page": "home"
         }
     )
 
 @app.get("/download/{challenge_id}")
-def download_file(challenge_id: int, db: Session = Depends(get_db)):
-    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
-    if not challenge:
-        raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
-    
-    if not challenge.file_name:
-        raise HTTPException(status_code=404, detail="To zadanie nie ma pliku do pobrania!")
-    
+def download_file(challenge_id: int):
     files_folder = os.path.join(BASE_DIR, "challenges_files")
-    file_path = os.path.join(files_folder, challenge.file_name)
     
+    file_map = {
+        1: "tajemniczy_plik.txt",
+        2: "cezar.txt",
+    }
+    
+    filename = file_map.get(challenge_id)
+    if not filename:
+        raise HTTPException(status_code=404, detail="Plik nie istnieje!")
+    
+    file_path = os.path.join(files_folder, filename)
     if os.path.exists(file_path):
-        return FileResponse(file_path, filename=challenge.file_name)
+        return FileResponse(file_path, filename=filename)
     
-    raise HTTPException(status_code=404, detail="Plik nie istnieje na serwerze!")
+    raise HTTPException(status_code=404, detail="Plik nie istnieje!")
+
+def _render_challenge_feedback(
+    request: Request,
+    challenge: models.Challenge,
+    current_user: models.User | None,
+    db: Session,
+    message: str,
+    solved: bool,
+):
+    logged_in_user = current_user.username if current_user else None
+    active_instance = get_active_instance(db, current_user.id, challenge.id) if current_user else None
+    current_instance_url = instance_url(active_instance) if active_instance else None
+    challenge_attempts = 0
+    if current_user:
+        challenge_attempts = (
+            db.query(models.Submission)
+            .filter(
+                models.Submission.user_id == current_user.id,
+                models.Submission.challenge_id == challenge.id,
+            )
+            .count()
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "zerofour/challenge.html",
+        {
+            "request": request,
+            "username": logged_in_user,
+            "is_admin": bool(current_user and current_user.role == "admin"),
+            "challenge": challenge,
+            "message": message,
+            "solved": solved,
+            "user_points": get_user_points(db, current_user),
+            "current_instance": active_instance,
+            "current_instance_url": current_instance_url,
+            "instance_error": None,
+            "instance_notice": None,
+            "challenge_attempts": challenge_attempts,
+            "max_flag_attempts": MAX_FLAG_ATTEMPTS_PER_MINUTE,
+            "hints": get_hint_view(db, challenge, current_user),
+            "hint_message": None,
+            "hint_error": None,
+            "active_page": "home",
+        },
+    )
+
 
 @app.post("/challenge/{challenge_id}/check")
 def check_flag(
     request: Request,
     challenge_id: int,
     flag: str = Form(...),
-    logged_in_user: str = Cookie(None),
-    db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
-    if not challenge:
+    challenge = (
+        db.query(models.Challenge)
+        .filter(models.Challenge.id == challenge_id)
+        .first()
+    )
+    if challenge is None:
         raise HTTPException(status_code=404, detail="Zadanie nie istnieje!")
-    
-    user_points = get_user_points(db, logged_in_user)
-    
-    if not logged_in_user:
-        return templates.TemplateResponse(
+
+    if current_user is None:
+        return _render_challenge_feedback(
             request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-                "challenge": challenge,
-                "message": "Musisz byc zalogowany, aby zdobyc punkty!",
-                "solved": False,
-                "user_points": user_points,
-                "active_page": "home"
-            }
-        )
-    
-    user = db.query(models.User).filter(models.User.username == logged_in_user).first()
-    if not user:
-        return templates.TemplateResponse(
-            request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-                "challenge": challenge,
-                "message": "Nie znaleziono uzytkownika!",
-                "solved": False,
-                "user_points": user_points,
-                "active_page": "home"
-            }
-        )
-    
-    existing_solve = db.query(models.Solve).filter(
-        models.Solve.user_id == user.id,
-        models.Solve.challenge_id == challenge.id
-    ).first()
-    
-    if existing_solve:
-        return templates.TemplateResponse(
-            request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-                "challenge": challenge,
-                "message": "Juz rozwiazales to zadanie!",
-                "solved": True,
-                "user_points": user_points,
-                "active_page": "home"
-            }
-        )
-    
-    if flag.strip() == challenge.flag:
-        user.score += challenge.points
-        new_solve = models.Solve(
-            user_id=user.id,
-            challenge_id=challenge.id
-        )
-        db.add(new_solve)
-        db.commit()
-        
-        user_points = user.score
-        
-        return templates.TemplateResponse(
-            request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-                "challenge": challenge,
-                "message": f"Poprawna flaga! +{challenge.points} punktow!",
-                "solved": True,
-                "user_points": user_points,
-                "active_page": "home"
-            }
-        )
-    else:
-        return templates.TemplateResponse(
-            request,
-            "zerofour/challenge.html",
-            {
-                "request": request,
-                "username": logged_in_user,
-                "challenge": challenge,
-                "message": "Niepoprawna flaga! Sprobuj ponownie.",
-                "solved": False,
-                "user_points": user_points,
-                "active_page": "home"
-            }
+            challenge,
+            None,
+            db,
+            "Musisz być zalogowany, aby przesyłać flagi i zdobywać punkty.",
+            False,
         )
 
-
-# Globalny klient Docker
-docker_client = docker.from_env()
-
-# Słownik do śledzenia uruchomionych kontenerów
-running_containers = {}
-
-@app.post("/challenge/{challenge_id}/start-docker")
-def start_docker_challenge(
-    challenge_id: int,
-    logged_in_user: str = Cookie(None),
-    db: Session = Depends(get_db)
-):
-    if not logged_in_user:
-        raise HTTPException(status_code=401, detail="Musisz być zalogowany!")
-    
-    challenge = db.query(models.Challenge).filter(models.Challenge.id == challenge_id).first()
-    if not challenge or not challenge.docker_image:
-        raise HTTPException(status_code=404, detail="To zadanie nie ma obrazu Docker!")
-    
-    container_key = f"{logged_in_user}_{challenge_id}"
-    if container_key in running_containers:
-        old_container = running_containers[container_key]
-        try:
-            old_container['container'].remove(force=True)
-        except:
-            pass
-    
     try:
-        used_ports = {c['port'] for c in running_containers.values()}
-        port = random.randint(30000, 31000)
-        while port in used_ports:
-            port = random.randint(30000, 31000)
-        
-        container = docker_client.containers.run(
-            challenge.docker_image,
-            detach=True,
-            ports={'7000/tcp': port},
-            remove=False,
-            mem_limit='256m',
-            cpu_period=100000,
-            cpu_quota=50000,
-            network_disabled=False
+        result = record_flag_submission(db, current_user, challenge, flag)
+    except SubmissionRateLimitError as exc:
+        return _render_challenge_feedback(
+            request,
+            challenge,
+            current_user,
+            db,
+            str(exc),
+            False,
         )
-        
-        running_containers[container_key] = {
-            'container': container,
-            'port': port,
-            'challenge_id': challenge_id,
-            'username': logged_in_user
-        }
-        
-        return {
-            "status": "started",
-            "url": f"http://127.0.0.1:{port}",
-            "port": port,
-            "message": f"Kontener uruchomiony. Otwórz: http://127.0.0.1:{port}"
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Błąd uruchamiania kontenera: {str(e)}")
 
+    if result["already_solved"]:
+        message = "Już rozwiązałeś to zadanie!"
+        solved = True
+    elif result["is_correct"]:
+        xp_gained = result.get("base_xp_awarded", 0) + result.get("bonus_xp_awarded", 0)
+        message = (
+            f"Poprawna flaga! +{result['points_awarded']} punktów, "
+            f"+{xp_gained} XP. Osiągnięto poziom {result.get('level', 1)}."
+        )
+        awarded = result.get("achievements_awarded", [])
+        if awarded:
+            names = ", ".join(f"{item['icon']} {item['name']}" for item in awarded)
+            message += f" Nowe osiągnięcia: {names}."
+        if result.get("current_streak", 0):
+            message += f" Seria rozwiązań: {result['current_streak']} dni."
+        solved = True
+    else:
+        message = "Niepoprawna flaga! Próba została zapisana w historii."
+        solved = False
 
-@app.post("/challenge/{challenge_id}/stop-docker")
-def stop_docker_challenge(
-    challenge_id: int,
-    logged_in_user: str = Cookie(None)
-):
-    if not logged_in_user:
-        raise HTTPException(status_code=401, detail="Musisz być zalogowany!")
-    
-    container_key = f"{logged_in_user}_{challenge_id}"
-    if container_key in running_containers:
-        try:
-            container_data = running_containers[container_key]
-            container_data['container'].remove(force=True)
-            del running_containers[container_key]
-            return {"status": "stopped", "message": "Kontener zatrzymany i usunięty"}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Błąd zatrzymywania: {str(e)}")
-    
-    raise HTTPException(status_code=404, detail="Nie znaleziono uruchomionego kontenera dla tego zadania")
-
-
-def cleanup_old_containers():
-    while True:
-        time.sleep(60)
-        to_remove = []
-        
-        for key, data in list(running_containers.items()):
-            try:
-                container = data['container']
-                container.reload()
-                created_at = container.attrs['Created']
-                from datetime import datetime
-                created_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                age_seconds = (datetime.now(created_dt.tzinfo) - created_dt).total_seconds()
-                
-                if age_seconds > 1800:
-                    to_remove.append(key)
-            except:
-                to_remove.append(key)
-        
-        for key in to_remove:
-            try:
-                data = running_containers[key]
-                data['container'].remove(force=True)
-                del running_containers[key]
-                print(f"Usunięto kontener: {key}")
-            except:
-                pass
-
-cleanup_thread = threading.Thread(target=cleanup_old_containers, daemon=True)
-cleanup_thread.start()
+    return _render_challenge_feedback(
+        request,
+        challenge,
+        current_user,
+        db,
+        message,
+        solved,
+    )
