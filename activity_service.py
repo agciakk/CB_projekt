@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 import models
 from achievement_service import process_successful_solve
+from tournament_service import record_tournament_solve
+from notification_service import create_notification
 
 FLAG_ATTEMPT_WINDOW_SECONDS = 60
 MAX_FLAG_ATTEMPTS_PER_MINUTE = max(
@@ -46,10 +48,37 @@ def record_flag_submission(
         .first()
     )
     if existing_solve:
+        # A challenge solved before a tournament can still count in that
+        # tournament when the player submits the correct flag during its window.
+        now = datetime.utcnow()
+        is_correct = compare_digest(
+            (submitted_flag or "").strip().encode("utf-8"),
+            (challenge.flag or "").encode("utf-8"),
+        )
+        if is_correct:
+            tournament_points = record_tournament_solve(db, user, challenge, now)
+            if tournament_points:
+                submission = models.Submission(
+                    user_id=user.id,
+                    challenge_id=challenge.id,
+                    is_correct=True,
+                    submitted_at=now,
+                )
+                db.add(submission)
+                db.commit()
+                db.refresh(submission)
+                return {
+                    "already_solved": True,
+                    "is_correct": True,
+                    "points_awarded": 0,
+                    "tournament_points_awarded": tournament_points,
+                    "submission": submission,
+                }
         return {
             "already_solved": True,
             "is_correct": True,
             "points_awarded": 0,
+            "tournament_points_awarded": 0,
             "submission": None,
         }
 
@@ -97,6 +126,7 @@ def record_flag_submission(
     db.add(submission)
 
     points_awarded = 0
+    tournament_points_awarded = 0
     gamification_result = {
         "base_xp_awarded": 0,
         "bonus_xp_awarded": 0,
@@ -115,6 +145,17 @@ def record_flag_submission(
             )
         )
         gamification_result = process_successful_solve(db, user, challenge, now)
+        for achievement in gamification_result.get("achievements_awarded", []):
+            create_notification(
+                db,
+                user.id,
+                "achievement",
+                f"Nowa odznaka: {achievement['name']}",
+                f"Zdobywasz osiągnięcie {achievement['icon']} {achievement['name']} i otrzymujesz +{achievement['xp_reward']} XP.",
+                target_url="/profile",
+                dedupe_key=f"achievement:{user.id}:{achievement['code']}",
+            )
+        tournament_points_awarded = record_tournament_solve(db, user, challenge, now)
 
     try:
         db.commit()
@@ -147,6 +188,7 @@ def record_flag_submission(
         "already_solved": False,
         "is_correct": is_correct,
         "points_awarded": points_awarded,
+        "tournament_points_awarded": tournament_points_awarded,
         "submission": submission,
         **gamification_result,
     }
